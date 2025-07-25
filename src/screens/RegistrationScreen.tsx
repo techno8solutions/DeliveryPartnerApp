@@ -1,37 +1,46 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  Platform,
+  Modal,
+} from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
-  interface FormData {
-    fullName: string;
-    dateOfBirth: Date;
-    gender: string;
-    phoneNumber: string;
-    email: string;
-    emergencyContactName: string;
-    emergencyContactPhone: string;
-    street: string;
-    city: string;
-    postalCode: string;
-    addressProof: string | null;
-    governmentId: string | null;
-    selfie: string | null;
-    vehicleType: string;
-    vehicleRegistration: string;
-    vehicleInsurance: string | null;
-    drivingLicense: string | null;
-    availability: {
-      [key: string]: {
-        morning: boolean;
-        afternoon: boolean;
-        evening: boolean;
-      };
+interface FormData {
+  fullName: string;
+  dateOfBirth: Date;
+  gender: string;
+  phoneNumber: string;
+  email: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  street: string;
+  city: string;
+  postalCode: string;
+  addressProof: string | null;
+  governmentId: string | null;
+  selfie: string | null;
+  vehicleType: string;
+  vehicleRegistration: string;
+  vehicleInsurance: string | null;
+  drivingLicense: string | null;
+  availability: {
+    [key: string]: {
+      morning: boolean;
+      afternoon: boolean;
+      evening: boolean;
     };
-  }
+  };
+}
 
 interface ReviewItemProps {
   label: string;
@@ -42,38 +51,38 @@ interface ReviewDocumentProps {
   label: string;
   value: string | null | undefined;
 }
-
+interface VehicleOption {
+  label: string;
+  value: string;
+}
 const RegistrationScreen = () => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [showPicker, setShowPicker] = useState(false);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDOBPicker, setShowDOBPicker] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [formData, setFormData] = useState({
-    // Personal Details
     fullName: '',
     dateOfBirth: new Date(),
     gender: 'male',
-
-    // Contact Details
     phoneNumber: '',
     email: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
-
-    // Address Details
     street: '',
     city: '',
     postalCode: '',
-
-    // Documents
     addressProof: null,
     governmentId: null,
     selfie: null,
-
-    // Vehicle Details
     vehicleType: 'bike',
     vehicleRegistration: '',
     vehicleInsurance: null,
     drivingLicense: null,
-
-    // Availability
     availability: {
       monday: { morning: false, afternoon: false, evening: false },
       tuesday: { morning: false, afternoon: false, evening: false },
@@ -84,12 +93,42 @@ const RegistrationScreen = () => {
       sunday: { morning: false, afternoon: false, evening: false },
     },
   });
-
+  const vehicleOptions: VehicleOption[] = [
+    { label: 'Bicycle', value: 'bicycle' },
+    { label: 'Bike', value: 'bike' },
+    { label: 'Scooter', value: 'scooter' },
+    { label: 'Car', value: 'car' },
+    { label: 'Van', value: 'van' },
+  ];
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   const steps = ['Personal', 'Contact', 'Address', 'Documents', 'Vehicle', 'Schedule', 'Review'];
 
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const formattedDate =
+    selectedDay && selectedMonth !== null && selectedYear
+      ? `${selectedDay} ${months[selectedMonth]} ${selectedYear}`
+      : '';
 
+  const handleDone = () => {
+    setShowDOBPicker(false);
+  };
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
   const handleInputChange = <K extends keyof FormData>(field: K, value: FormData[K]): void => {
     setFormData({
       ...formData,
@@ -123,6 +162,7 @@ const RegistrationScreen = () => {
       handleInputChange('dateOfBirth', selectedDate);
     }
   };
+  const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
   const renderStep = () => {
     switch (currentStep) {
@@ -169,23 +209,101 @@ const RegistrationScreen = () => {
               {datePickerVisible && (
                 <View className="mt-2">
                   {Platform.OS === 'ios' ? (
-                    <View className="rounded-lg bg-white p-4 shadow-sm">
-                      <DateTimePicker
-                        value={formData.dateOfBirth}
-                        mode="date"
-                        display="spinner"
-                        onChange={handleDateChange}
-                        textColor="#111827" // iOS only
-                        themeVariant="light" // iOS only
-                        maximumDate={new Date()} // Prevent future dates
-                        locale="en-US"
-                      />
+                    <>
                       <TouchableOpacity
-                        className="mt-4 items-center self-end rounded-full bg-blue-500 px-6 py-2"
-                        onPress={() => setDatePickerVisible(false)}>
-                        <Text className="font-medium text-white">Done</Text>
+                        className="h-12 flex-row items-center justify-between rounded-lg bg-white px-4 shadow-sm"
+                        onPress={() => setShowDOBPicker(true)}
+                        activeOpacity={0.7}>
+                        <Text className={`${formattedDate ? 'text-gray-900' : 'text-gray-400'}`}>
+                          {formattedDate || 'Select Date of Birth'}
+                        </Text>
                       </TouchableOpacity>
-                    </View>
+
+                      <Modal
+                        visible={showDOBPicker}
+                        transparent={true}
+                        animationType="slide"
+                        onRequestClose={() => setShowDOBPicker(false)}>
+                        <View className="flex-1 justify-end bg-black/50">
+                          <View className="rounded-t-xl bg-white p-4">
+                            <View className="mb-2 flex-row items-center justify-between">
+                              <TouchableOpacity onPress={() => setShowDOBPicker(false)}>
+                                <Text className="text-base text-blue-500">Cancel</Text>
+                              </TouchableOpacity>
+                              <Text className="font-medium text-gray-900">Select Date</Text>
+                              <TouchableOpacity onPress={handleDone}>
+                                <Text className="text-base text-blue-500">Done</Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            <View className="flex-row justify-between">
+                              {/* Days */}
+                              <ScrollView style={{ height: 150 }} className="w-1/3">
+                                {days.map((day) => (
+                                  <TouchableOpacity
+                                    key={day}
+                                    className={`py-2 text-center ${
+                                      selectedDay === day ? 'bg-blue-100' : ''
+                                    }`}
+                                    onPress={() => setSelectedDay(day)}>
+                                    <Text
+                                      className={`text-center text-base ${
+                                        selectedDay === day
+                                          ? 'font-semibold text-blue-600'
+                                          : 'text-gray-700'
+                                      }`}>
+                                      {day}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+
+                              {/* Months */}
+                              <ScrollView style={{ height: 150 }} className="w-1/3">
+                                {months.map((month, index) => (
+                                  <TouchableOpacity
+                                    key={month}
+                                    className={`py-2 text-center ${
+                                      selectedMonth === index ? 'bg-blue-100' : ''
+                                    }`}
+                                    onPress={() => setSelectedMonth(index)}>
+                                    <Text
+                                      className={`text-center text-base ${
+                                        selectedMonth === index
+                                          ? 'font-semibold text-blue-600'
+                                          : 'text-gray-700'
+                                      }`}>
+                                      {month}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+
+                              {/* Years */}
+                              <ScrollView style={{ height: 150 }} className="w-1/3">
+                                {years.map((year) => (
+                                  <TouchableOpacity
+                                    key={year}
+                                    className={`py-2 text-center ${
+                                      selectedYear === year ? 'bg-blue-100' : ''
+                                    }`}
+                                    onPress={() => setSelectedYear(year)}>
+                                    <Text
+                                      className={`text-center text-base ${
+                                        selectedYear === year
+                                          ? 'font-semibold text-blue-600'
+                                          : 'text-gray-700'
+                                      }`}>
+                                      {year}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+                            </View>
+                          </View>
+                        </View>
+                      </Modal>
+                    </>
                   ) : (
                     <DateTimePicker
                       value={formData.dateOfBirth}
@@ -206,17 +324,56 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="transgender" size={20} color="#6b7280" className="ml-3" />
 
                 {Platform.OS === 'ios' ? (
-                  // iOS Picker
-                  <Picker
-                    style={{ flex: 1, height: 50 }}
-                    itemStyle={{ fontSize: 16, color: '#111827' }}
-                    selectedValue={formData.gender}
-                    onValueChange={(itemValue) => handleInputChange('gender', itemValue)}>
-                    <Picker.Item label="Select Gender" value="" color="#9ca3af" />
-                    <Picker.Item label="Male" value="male" />
-                    <Picker.Item label="Female" value="female" />
-                    <Picker.Item label="Other" value="other" />
-                  </Picker>
+                  <>
+                    <TouchableOpacity
+                      className="h-12 flex-row items-center justify-between rounded-lg  px-4"
+                      onPress={() => setShowGenderPicker(true)}
+                      activeOpacity={0.7}>
+                      <Text className={`${formData.gender ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {formData.gender ? capitalize(formData.gender) : 'Select Gender'}
+                      </Text>
+                      <MaterialIcons name="keyboard-arrow-down" size={24} color="#6b7280" />
+                    </TouchableOpacity>
+
+                    <Modal
+                      visible={showGenderPicker}
+                      transparent
+                      animationType="slide"
+                      onRequestClose={() => setShowGenderPicker(false)}>
+                      <View className="flex-1 justify-end bg-black/50">
+                        <View className="rounded-t-xl bg-white p-4">
+                          {/* Header */}
+                          <View className="mb-2 flex-row items-center justify-between">
+                            <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
+                              <Text className="text-base text-blue-500">Cancel</Text>
+                            </TouchableOpacity>
+                            <Text className="font-medium text-gray-900">Select Gender</Text>
+                            <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
+                              <Text className="text-base text-blue-500">Done</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Gender Options */}
+                          <View className="h-[200px]">
+                            {['Male', 'Female', 'Other'].map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                className={`rounded-md px-4 py-3 ${
+                                  formData.gender === option.toLowerCase()
+                                    ? 'bg-blue-100'
+                                    : 'bg-transparent'
+                                }`}
+                                onPress={() => {
+                                  handleInputChange('gender', option.toLowerCase());
+                                }}>
+                                <Text className="text-lg text-gray-800">{option}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                    </Modal>
+                  </>
                 ) : (
                   // Android Picker
                   <Picker
@@ -468,19 +625,57 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="directions-car" size={20} color="#6b7280" className="ml-3" />
 
                 {Platform.OS === 'ios' ? (
-                  // iOS Picker
-                  <Picker
-                    style={{ flex: 1, height: 50 }}
-                    itemStyle={{ fontSize: 16, color: '#111827' }}
-                    selectedValue={formData.vehicleType}
-                    onValueChange={(itemValue) => handleInputChange('vehicleType', itemValue)}>
-                    <Picker.Item label="Select Vehicle Type" value="" color="#9ca3af" />
-                    <Picker.Item label="Bicycle" value="bicycle" />
-                    <Picker.Item label="Bike" value="bike" />
-                    <Picker.Item label="Scooter" value="scooter" />
-                    <Picker.Item label="Car" value="car" />
-                    <Picker.Item label="Van" value="van" />
-                  </Picker>
+                  <>
+                    <TouchableOpacity
+                      className="h-12 flex-row items-center justify-between rounded-lg  px-4"
+                      onPress={() => setShowPicker(true)}
+                      activeOpacity={0.7}>
+                      <Text
+                        className={`${formData.vehicleType ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {formData.vehicleType || 'Select Vehicle Type'}
+                      </Text>
+                      <MaterialIcons name="keyboard-arrow-down" size={24} color="#6b7280" />
+                    </TouchableOpacity>
+
+                    <Modal
+                      visible={showPicker}
+                      transparent
+                      animationType="slide"
+                      onRequestClose={() => setShowPicker(false)}>
+                      <View className="flex-1 justify-end bg-black/50">
+                        <View className="rounded-t-xl bg-white p-4">
+                          {/* Header */}
+                          <View className="mb-2 flex-row items-center justify-between">
+                            <TouchableOpacity onPress={() => setShowPicker(false)}>
+                              <Text className="text-base text-blue-500">Cancel</Text>
+                            </TouchableOpacity>
+                            <Text className="font-medium text-gray-900">Select Vehicle</Text>
+                            <TouchableOpacity onPress={() => setShowPicker(false)}>
+                              <Text className="text-base text-blue-500">Done</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Options */}
+                          <View className="h-[250px]">
+                            {['Bicycle', 'Bike', 'Scooter', 'Car', 'Van'].map((option) => (
+                              <TouchableOpacity
+                                key={option}
+                                className={`rounded-md px-4 py-3 ${
+                                  formData.vehicleType === option.toLowerCase()
+                                    ? 'bg-blue-100'
+                                    : 'bg-transparent'
+                                }`}
+                                onPress={() => {
+                                  handleInputChange('vehicleType', option.toLowerCase());
+                                }}>
+                                <Text className="text-lg text-gray-800">{option}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                    </Modal>
+                  </>
                 ) : (
                   // Android Picker
                   <Picker
@@ -725,28 +920,27 @@ const RegistrationScreen = () => {
     }
   };
 
-const ReviewItem: React.FC<ReviewItemProps> = ({ label, value, icon }) => (
-  <View className="mb-3 flex-row">
-    <MaterialIcons name={icon} size={20} color="#6b7280" className="mr-2.5 mt-1" />
-    <View className="flex-1">
-      <Text className="mb-1 text-xs text-gray-500">{label}</Text>
-      <Text className="text-base text-gray-900">{value || 'Not provided'}</Text>
+  const ReviewItem: React.FC<ReviewItemProps> = ({ label, value, icon }) => (
+    <View className="mb-3 flex-row">
+      <MaterialIcons name={icon} size={20} color="#6b7280" className="mr-2.5 mt-1" />
+      <View className="flex-1">
+        <Text className="mb-1 text-xs text-gray-500">{label}</Text>
+        <Text className="text-base text-gray-900">{value || 'Not provided'}</Text>
+      </View>
     </View>
-  </View>
-);
+  );
 
-
-const ReviewDocument: React.FC<ReviewDocumentProps> = ({ label, value }) => (
-  <View className="mb-3 flex-row">
-    <MaterialIcons name="attach-file" size={20} color="#6b7280" className="mr-2.5 mt-1" />
-    <View className="flex-1">
-      <Text className="mb-1 text-xs text-gray-500">{label}</Text>
-      <Text className={`text-base ${value ? 'text-green-500' : 'text-red-500'}`}>
-        {value ? 'Uploaded' : 'Missing'}
-      </Text>
+  const ReviewDocument: React.FC<ReviewDocumentProps> = ({ label, value }) => (
+    <View className="mb-3 flex-row">
+      <MaterialIcons name="attach-file" size={20} color="#6b7280" className="mr-2.5 mt-1" />
+      <View className="flex-1">
+        <Text className="mb-1 text-xs text-gray-500">{label}</Text>
+        <Text className={`text-base ${value ? 'text-green-500' : 'text-red-500'}`}>
+          {value ? 'Uploaded' : 'Missing'}
+        </Text>
+      </View>
     </View>
-  </View>
-);
+  );
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -845,7 +1039,7 @@ const ReviewDocument: React.FC<ReviewDocumentProps> = ({ label, value }) => (
       </View>
 
       {/* Form Content */}
-      <ScrollView className="flex-1 px-5">
+      <ScrollView className="flex-1 px-5 pt-5">
         {renderStep()}
         <View className="h-5" />
       </ScrollView>
