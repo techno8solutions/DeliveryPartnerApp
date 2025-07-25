@@ -2,7 +2,8 @@ export const ROUTES = {
   LOGIN: 'Login',
   OTP: 'OTP',
   REGISTRATION: 'Registration',
-  SIGNIN: 'SignIn',
+  SIGNUP: 'SignUp',
+  VERIFICATION: 'Verification',
   DASHBOARD: 'Dashboard',
   ORDER_DETAILS: 'OrderDetails',
   PROFILE: 'Profile',
@@ -11,6 +12,4 @@ export const ROUTES = {
   HISTORY: 'History',
   SUPPORT: 'Support',
   AVAILABILITY: 'Availability',
-  SIGNUP: 'SignUp',
-  VERIFICATION:'Verification',
 } as const;

@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
 import { COLORS } from '~/constants/colors';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,7 +22,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 type SignUpScreenProp = NativeStackNavigationProp<RootStackParamList, typeof ROUTES.SIGNUP>;
 
 const SignUpScreen = () => {
-  const dispatch = useDispatch();
   const navigation = useNavigation<SignUpScreenProp>();
 
   const [formData, setFormData] = useState({
@@ -46,45 +44,42 @@ const SignUpScreen = () => {
     setFormData({ ...formData, [field]: value });
   };
 
-const handleSignUp = async () => {
-  if (!formData.fullName.trim())
-    return Alert.alert('Validation Error', 'Please enter your full name');
-  if (!isValidEmail(formData.email))
-    return Alert.alert('Validation Error', 'Please enter a valid email address');
-  if (!isValidPhone(formData.mobile))
-    return Alert.alert('Validation Error', 'Please enter a valid 10-digit phone number');
-  if (!isStrongPassword(formData.password))
-    return Alert.alert(
-      'Weak Password',
-      'Password must be 8+ chars, include uppercase, lowercase, numbers'
-    );
-  if (formData.password !== formData.confirmPassword)
-    return Alert.alert('Validation Error', 'Passwords do not match');
-  if (!formData.vehicleType)
-    return Alert.alert('Validation Error', 'Please select your vehicle type');
+  const handleSignUp = async () => {
+    if (!formData.fullName.trim())
+      return Alert.alert('Validation Error', 'Please enter your full name');
+    if (!isValidEmail(formData.email))
+      return Alert.alert('Validation Error', 'Please enter a valid email address');
+    if (!isValidPhone(formData.mobile))
+      return Alert.alert('Validation Error', 'Please enter a valid 10-digit phone number');
+    if (!isStrongPassword(formData.password))
+      return Alert.alert(
+        'Weak Password',
+        'Password must be 8+ chars, include uppercase, lowercase, numbers'
+      );
+    if (formData.password !== formData.confirmPassword)
+      return Alert.alert('Validation Error', 'Passwords do not match');
+    if (!formData.vehicleType)
+      return Alert.alert('Validation Error', 'Please select your vehicle type');
 
-  setIsLoading(true);
+    setIsLoading(true);
 
-  try {
-    // await dispatch(signUpDeliveryPartner(formData)).unwrap();
+    try {
+      // await dispatch(signUpDeliveryPartner(formData)).unwrap();
 
-    navigation.navigate(ROUTES.VERIFICATION, {
-      email: formData.email,
-      mobile: formData.mobile,
-    });
-  } catch (error) {
-    const errMsg = (error as Error).message || 'Something went wrong';
-    Alert.alert('Sign Up Failed', errMsg);
-  } finally {
-    setIsLoading(false);
-  }
-};
+      navigation.navigate(ROUTES.OTP, { phone: '1234567890' });
+    } catch (error) {
+      const errMsg = (error as Error).message || 'Something went wrong';
+      Alert.alert('Sign Up Failed', errMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <KeyboardAwareScrollView className="flex-1 bg-[#f8fafc]" keyboardShouldPersistTaps="handled">
       <SafeAreaView className="flex-1 px-6">
         <View className="items-center pb-4 pt-8">
-          <Image source={require('../assets/delivery-boy.png')} className='w-60 h-60 mb-10' />
+          <Image source={require('../assets/delivery-boy.png')} className="mb-10 h-60 w-60" />
           <Text className="mb-2 text-center text-2xl font-bold text-[#1e293b]">
             Become a Delivery Partner
           </Text>

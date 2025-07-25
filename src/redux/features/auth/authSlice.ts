@@ -46,7 +46,6 @@ const authSlice = createSlice({
     // OTP verified
     verifyOTP: (state) => {
       state.otpVerified = true;
-      state.isLoggedIn = true;
     },
 
     // Mark user as signed up
