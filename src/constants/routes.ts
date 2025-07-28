@@ -3,6 +3,7 @@ export const ROUTES = {
   OTP: 'OTP',
   REGISTRATION: 'Registration',
   SIGNUP: 'SignUp',
+  NOTFICATION:'Notifications',
   VERIFICATION: 'Verification',
   DASHBOARD: 'Dashboard',
   ORDER_DETAILS: 'OrderDetails',
