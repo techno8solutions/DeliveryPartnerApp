@@ -8,6 +8,8 @@ interface AuthState {
   isLoggedIn: boolean;
   otpVerified: boolean;
   method: 'phone' | 'email' | 'google' | null;
+   tempToken?: string;
+  partnerId?: string;
 }
 
 const initialState: AuthState = {
@@ -18,6 +20,8 @@ const initialState: AuthState = {
   isLoggedIn: false,
   otpVerified: false,
   method: null,
+    tempToken: undefined,
+  partnerId: undefined,
 };
 
 const authSlice = createSlice({
@@ -68,6 +72,13 @@ const authSlice = createSlice({
       state.otpVerified = false;
       state.method = null;
     },
+        setTempToken: (
+      state,
+      action: PayloadAction<{ token: string; partnerId: string }>
+    ) => {
+      state.tempToken = action.payload.token;
+      state.partnerId = action.payload.partnerId;
+    },
   },
 });
 
@@ -79,6 +90,7 @@ export const {
   setSignedUp,
   login,
   logout,
+  setTempToken
 } = authSlice.actions;
 
 export default authSlice.reducer;

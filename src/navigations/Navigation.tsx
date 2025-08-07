@@ -18,7 +18,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const Navigation = () => {
   const { isSignedUp, isLoggedIn, otpVerified } = useSelector((state: RootState) => state.auth);
 
-  let initialRoute: keyof RootStackParamList = ROUTES.DASHBOARD;
+  let initialRoute: keyof RootStackParamList = ROUTES.SIGNUP;
 
   if (isSignedUp && !isLoggedIn) {
     initialRoute = ROUTES.REGISTRATION;

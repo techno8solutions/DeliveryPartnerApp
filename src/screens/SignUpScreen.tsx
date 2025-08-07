@@ -1,4 +1,3 @@
-// SignUpScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -18,12 +17,15 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import clsx from 'clsx';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
+import { useDispatch } from 'react-redux';
+import axios from 'axios';
+import { setEmailCredentials, setPhone, setSignedUp, setTempToken } from '~/redux/features/auth/authSlice';
+import Constants from 'expo-constants';
 type SignUpScreenProp = NativeStackNavigationProp<RootStackParamList, typeof ROUTES.SIGNUP>;
 
 const SignUpScreen = () => {
   const navigation = useNavigation<SignUpScreenProp>();
-
+  const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -35,7 +37,7 @@ const SignUpScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
+  const backendUrl = Constants.expoConfig?.extra?.backendUrl;
   const isValidEmail = (email: string) => /\S+@\S+\.\S+/.test(email);
   const isValidPhone = (phone: string) => /^\d{10}$/.test(phone);
   const isStrongPassword = (pwd: string) => /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.{8,})/.test(pwd);
@@ -62,13 +64,46 @@ const SignUpScreen = () => {
       return Alert.alert('Validation Error', 'Please select your vehicle type');
 
     setIsLoading(true);
-
     try {
-      // await dispatch(signUpDeliveryPartner(formData)).unwrap();
+      const response = await axios.post(
+        `${backendUrl}/delivery-partner/auth/signup`,
+        {
+          fullName: formData.fullName,
+          email: formData.email,
+          mobile: formData.mobile,
+          password: formData.password,
+          vehicleType: formData.vehicleType,
+        },
+        {
+          withCredentials: true,
+        }
+      );
+      console.log(response.data)
+      if (response.data.success) {
+        // Update Redux state with user information
+  const { partner_id, temp_token } = response.data;
 
-      navigation.navigate(ROUTES.OTP, { phone: '1234567890' });
-    } catch (error) {
-      const errMsg = (error as Error).message || 'Something went wrong';
+  dispatch(setPhone(formData.mobile));
+  dispatch(
+    setEmailCredentials({
+      email: formData.email,
+      password: formData.password,
+    })
+  );
+  dispatch(setSignedUp());
+
+  // 🔥 NEW: Store temp_token and partner_id
+  dispatch(setTempToken({ token: temp_token, partnerId: partner_id }));
+
+  navigation.navigate(ROUTES.OTP, {
+    phone: formData.mobile,
+    email: formData.email,
+  });
+      } else {
+        Alert.alert('Sign Up Failed', response.data.message || 'Registration failed');
+      }
+    } catch (error: any) {
+      const errMsg = error.response?.data?.message || error.message || 'Something went wrong';
       Alert.alert('Sign Up Failed', errMsg);
     } finally {
       setIsLoading(false);

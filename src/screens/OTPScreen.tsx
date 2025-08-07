@@ -12,20 +12,32 @@ import {
   TextInputKeyPressEventData,
   Platform,
 } from 'react-native';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useNavigation, NavigationProp, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ROUTES } from '~/constants/routes';
 import { RootStackParamList } from '~/navigations/types';
+import axios from 'axios';
+import { verifyOTP } from '~/redux/features/auth/authSlice';
+import { useDispatch } from 'react-redux';
+import Constants from 'expo-constants';
+import { useSelector } from 'react-redux';
+import { RootState } from '~/redux/store';
+type OTPScreenProps = {
+  route: RouteProp<RootStackParamList, typeof ROUTES.OTP>;
+};
 
-const OTPScreen: React.FC = () => {
+const OTPScreen: React.FC<OTPScreenProps> = ({ route }) => {
+  const { phone, email } = route.params;
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const tempToken = useSelector((state: RootState) => state.auth.tempToken);
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [timer, setTimer] = useState<number>(60);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const inputsRef = useRef<Array<TextInput | null>>([]);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
-
+  const backendUrl = Constants.expoConfig?.extra?.backendUrl;
+  const dispatch = useDispatch();
   const handleChange = (value: string, index: number) => {
     if (value.length > 1) {
       // Possibly pasted full OTP
@@ -98,7 +110,13 @@ const OTPScreen: React.FC = () => {
     ]).start();
   };
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    const countdown = setInterval(() => {
+      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(countdown);
+  }, []);
+  const handleSubmit = async () => {
     animateButton();
     const code = otp.join('');
 
@@ -110,26 +128,66 @@ const OTPScreen: React.FC = () => {
 
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      console.log(backendUrl);
+      const response = await axios.post(
+        `${backendUrl}/delivery-partner/auth/verify-otp`,
+        {
+          phone, // or email, depending on your verification method
+          otp: code,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${tempToken}`,
+          },
+          withCredentials: true,
+        }
+      );
+
+      if (response.data.success) {
+        // Update Redux state
+        dispatch(verifyOTP());
+        // dispatch(login()); // Mark user as logged in
+
+        // Navigate to appropriate screen
+        navigation.navigate(ROUTES.REGISTRATION);
+      } else {
+        throw new Error(response.data.message || 'OTP verification failed');
+      }
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.message || error.message || 'Failed to verify OTP. Please try again.';
+      Alert.alert('Verification Failed', errorMessage);
+      startShake();
+    } finally {
       setIsLoading(false);
-      Alert.alert('Success', `OTP Verified: ${code}`);
-      navigation.navigate(ROUTES.DASHBOARD);
-    }, 1500);
+    }
   };
 
-  useEffect(() => {
-    const countdown = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(countdown);
-  }, []);
-
-  const handleResend = () => {
+  const handleResend = async () => {
     if (timer > 0) return;
-    setOtp(['', '', '', '', '', '']);
-    setTimer(60);
-    inputsRef.current[0]?.focus();
-    Alert.alert('OTP Resent', 'A new code has been sent to your number');
+
+    try {
+      const response = await axios.post(
+        `${process.env.EXPO_BACKEND_URL}/delivery-partner/auth/resend-otp`,
+        { phone }, // or email
+        { withCredentials: true }
+      );
+
+      if (response.data.success) {
+        setOtp(['', '', '', '', '', '']);
+        setTimer(60);
+        inputsRef.current[0]?.focus();
+        Alert.alert('OTP Resent', 'A new code has been sent to your number');
+      } else {
+        throw new Error(response.data.message || 'Failed to resend OTP');
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Resend Failed',
+        error.response?.data?.message || error.message || 'Could not resend OTP'
+      );
+    }
   };
 
   return (

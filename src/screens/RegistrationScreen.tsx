@@ -8,6 +8,9 @@ import {
   Image,
   Platform,
   Modal,
+  PermissionsAndroid,
+  Switch,
+  Alert,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,40 +18,82 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
-interface FormData {
-  fullName: string;
-  dateOfBirth: Date;
-  gender: string;
-  phoneNumber: string;
-  email: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-  street: string;
-  city: string;
-  postalCode: string;
-  addressProof: string | null;
-  governmentId: string | null;
-  selfie: string | null;
-  vehicleType: string;
-  vehicleRegistration: string;
-  vehicleInsurance: string | null;
-  drivingLicense: string | null;
-  availability: {
-    [key: string]: {
-      morning: boolean;
-      afternoon: boolean;
-      evening: boolean;
-    };
-  };
-}
+import { ImagePickerResponse } from 'react-native-image-picker';
+import axios from 'axios';
+import { ActivityIndicator } from 'react-native-paper';
+import Constants from 'expo-constants';
+import { useSelector } from 'react-redux';
+import { RootState } from '~/redux/store';
+import { ROUTES } from '~/constants/routes';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '~/navigations/types';
 
+interface FormData {
+  // Personal Information
+  full_name: string;
+  gender: 'male' | 'female' | 'other';
+  phone_number: string;
+  email: string;
+  DOB: Date;
+
+  // Contact Information
+  emergency_contact_name: string;
+  emergency_contact_number: string;
+
+  // Address Information
+  street_address: string;
+  city: string;
+  postal_code: string;
+  government_id: string | null;
+  residential_proof: string | null;
+
+  // Vehicle Information
+  vehicle_type: string;
+  vehicle_number: string;
+  license_number: string;
+  license_expiry: string;
+  insurance_number: string;
+  insurance_expiry: string;
+  license_photo_url: string | null;
+  vehicle_photo_url: string | null;
+
+  // Visa Information
+  visa_type: string | boolean;
+  ni_number: string;
+  student_visa: string | boolean | null;
+  psw_visa: string | boolean | null;
+
+  // Documents
+  profile_photo_url: string | null;
+
+  // Availability
+  availability_schedule: AvailabilitySchedule;
+  // System Fields
+  availability_status: 'online' | 'offline' | 'busy' | 'on_break';
+  verification_status: 'pending' | 'verified' | 'rejected' | 'expired';
+  onboarding_completed: boolean;
+  total_deliveries: number;
+  successful_deliveries: number;
+  rating_average: number;
+  total_ratings: number;
+  commission_rate: number;
+}
+type Day = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+type TimeSlot = 'morning' | 'afternoon' | 'evening';
+
+type AvailabilitySchedule = {
+  [key in Day]: {
+    [slot in TimeSlot]: boolean;
+  };
+};
 interface ReviewItemProps {
   label: string;
   value: string | null | undefined;
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }
 interface ReviewDocumentProps {
-  label: string;
+  label: string | null;
   value: string | null | undefined;
 }
 interface VehicleOption {
@@ -62,28 +107,52 @@ const RegistrationScreen = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDOBPicker, setShowDOBPicker] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-
+  const [licenseExpiry, setLicenseExpiry] = useState<Date>(new Date());
+  const [showLicenseExpiryPicker, setShowLicenseExpiryPicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showInsuranceExpiryPicker, setShowInsuranceExpiryPicker] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [formData, setFormData] = useState({
-    fullName: '',
-    dateOfBirth: new Date(),
+    // Personal Information
+    full_name: '',
     gender: 'male',
-    phoneNumber: '',
+    phone_number: '',
     email: '',
-    emergencyContactName: '',
-    emergencyContactPhone: '',
-    street: '',
+    DOB: new Date(),
+
+    // Contact Information
+    emergency_contact_name: '',
+    emergency_contact_number: '',
+
+    // Address Information
+    street_address: '',
     city: '',
-    postalCode: '',
-    addressProof: null,
-    governmentId: null,
-    selfie: null,
-    vehicleType: 'bike',
-    vehicleRegistration: '',
-    vehicleInsurance: null,
-    drivingLicense: null,
-    availability: {
+    postal_code: '',
+    government_id: null,
+    residential_proof: null,
+
+    // Vehicle Information
+    vehicle_type: 'bicycle',
+    vehicle_number: '',
+    license_number: '',
+    license_expiry: new Date(),
+    insurance_number: '',
+    insurance_expiry: new Date(),
+    license_photo_url: null,
+    vehicle_photo_url: null,
+
+    // Visa Information
+    visa_type: '',
+    ni_number: '',
+    student_visa: '',
+    psw_visa: '',
+
+    // Documents
+    profile_photo_url: null,
+
+    // Availability
+    availability_schedule: {
       monday: { morning: false, afternoon: false, evening: false },
       tuesday: { morning: false, afternoon: false, evening: false },
       wednesday: { morning: false, afternoon: false, evening: false },
@@ -92,7 +161,21 @@ const RegistrationScreen = () => {
       saturday: { morning: false, afternoon: false, evening: false },
       sunday: { morning: false, afternoon: false, evening: false },
     },
+
+    // System Fields (default values)
+    availability_status: 'offline',
+    verification_status: 'pending',
+    onboarding_completed: false,
+    total_deliveries: 0,
+    successful_deliveries: 0,
+    rating_average: 0.0,
+    total_ratings: 0,
+    commission_rate: 0.15,
   });
+  const backendUrl = Constants.expoConfig?.extra?.backendUrl;
+  const tempToken = useSelector((state: RootState) => state.auth.tempToken);
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+
   const vehicleOptions: VehicleOption[] = [
     { label: 'Bicycle', value: 'bicycle' },
     { label: 'Bike', value: 'bike' },
@@ -135,34 +218,97 @@ const RegistrationScreen = () => {
       [field]: value,
     });
   };
-
   const handleDocumentUpload = async <
     K extends keyof Pick<
       FormData,
-      'addressProof' | 'governmentId' | 'selfie' | 'vehicleInsurance' | 'drivingLicense'
+      | 'government_id'
+      | 'residential_proof'
+      | 'profile_photo_url'
+      | 'license_photo_url'
+      | 'vehicle_photo_url'
     >,
   >(
     field: K
   ): Promise<void> => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+        base64: true, // Optional: if you need base64 encoding
+      });
 
-    if (!result.canceled && result.assets[0].uri) {
-      handleInputChange(field, result.assets[0].uri);
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        // For production, you would typically upload to cloud storage here
+        // and get back a URL to store in your database
+        const imageUri = result.assets[0].uri;
+
+        // Optionally compress the image before uploading
+        const compressedImage = await ImagePicker.launchImageLibraryAsync({
+          quality: 0.7,
+        });
+
+        handleInputChange(field, imageUri);
+
+        // Example of cloud upload (pseudo-code):
+        // const uploadUrl = await uploadToCloudStorage(imageUri);
+        // handleInputChange(field,? uploadUrl);
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      alert('Failed to select image');
     }
   };
 
   const handleDateChange = (event: DateTimePickerEvent, selectedDate: Date | undefined): void => {
     setDatePickerVisible(false);
     if (selectedDate) {
-      handleInputChange('dateOfBirth', selectedDate);
+      handleInputChange('DOB', selectedDate);
     }
   };
   const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+  const handleImageUpload = async (fieldName: string) => {
+    try {
+      // Request permissions for media library
+      if (Platform.OS === 'android') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Permission to access media library was denied');
+          return;
+        }
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedImage = result.assets[0];
+
+        setFormData((prev) => ({
+          ...prev,
+          [fieldName]: selectedImage.uri,
+        }));
+      } else {
+        console.log('Image picker cancelled or no asset selected');
+      }
+    } catch (error) {
+      console.error('Error handling image upload:', error);
+    }
+  };
+  // const handleLicenseExpiryChange = (event: any, selectedDate?: String) => {
+  //   setShowLicenseExpiryPicker(false);
+  //   if (selectedDate) {
+  //     setLicenseExpiry(selectedDate);
+  //     // Also update your formData if needed
+  //     handleInputChange('license_expiry', selectedDate.toISOString().split('T')[0]);
+  //   }
+  // };
 
   const renderStep = () => {
     switch (currentStep) {
@@ -180,8 +326,8 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="person" size={20} color="#6b7280" />
                 <TextInput
                   className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.fullName}
-                  onChangeText={(text) => handleInputChange('fullName', text)}
+                  value={formData.full_name}
+                  onChangeText={(text) => handleInputChange('full_name', text)}
                   placeholder="Enter your full name"
                   placeholderTextColor="#9ca3af"
                 />
@@ -197,7 +343,7 @@ const RegistrationScreen = () => {
                 activeOpacity={0.7}>
                 <MaterialIcons name="event" size={22} color="#4b5563" />
                 <Text className="ml-3 flex-1 text-base text-gray-900">
-                  {formData.dateOfBirth.toLocaleDateString('en-US', {
+                  {formData.DOB.toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
@@ -306,7 +452,7 @@ const RegistrationScreen = () => {
                     </>
                   ) : (
                     <DateTimePicker
-                      value={formData.dateOfBirth}
+                      value={formData.DOB}
                       mode="date"
                       display="default"
                       onChange={handleDateChange}
@@ -364,7 +510,10 @@ const RegistrationScreen = () => {
                                     : 'bg-transparent'
                                 }`}
                                 onPress={() => {
-                                  handleInputChange('gender', option.toLowerCase());
+                                  handleInputChange(
+                                    'gender',
+                                    option.toLowerCase() as 'male' | 'female' | 'other'
+                                  );
                                 }}>
                                 <Text className="text-lg text-gray-800">{option}</Text>
                               </TouchableOpacity>
@@ -383,7 +532,9 @@ const RegistrationScreen = () => {
                     dropdownIconRippleColor="#d1d5db"
                     numberOfLines={1}
                     selectedValue={formData.gender}
-                    onValueChange={(itemValue) => handleInputChange('gender', itemValue)}>
+                    onValueChange={(itemValue) =>
+                      handleInputChange('gender', itemValue as 'male' | 'female' | 'other')
+                    }>
                     <Picker.Item
                       label="Select Gender"
                       value=""
@@ -426,8 +577,8 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="phone" size={20} color="#6b7280" />
                 <TextInput
                   className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.phoneNumber}
-                  onChangeText={(text) => handleInputChange('phoneNumber', text)}
+                  value={formData.phone_number}
+                  onChangeText={(text) => handleInputChange('phone_number', text)}
                   keyboardType="phone-pad"
                   placeholder="Enter phone number"
                   placeholderTextColor="#9ca3af"
@@ -458,8 +609,8 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="contact-emergency" size={20} color="#6b7280" />
                 <TextInput
                   className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.emergencyContactName}
-                  onChangeText={(text) => handleInputChange('emergencyContactName', text)}
+                  value={formData.emergency_contact_name}
+                  onChangeText={(text) => handleInputChange('emergency_contact_name', text)}
                   placeholder="Emergency contact name"
                   placeholderTextColor="#9ca3af"
                 />
@@ -474,8 +625,8 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="phone" size={20} color="#6b7280" />
                 <TextInput
                   className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.emergencyContactPhone}
-                  onChangeText={(text) => handleInputChange('emergencyContactPhone', text)}
+                  value={formData.emergency_contact_number}
+                  onChangeText={(text) => handleInputChange('emergency_contact_number', text)}
                   keyboardType="phone-pad"
                   placeholder="Emergency contact phone"
                   placeholderTextColor="#9ca3af"
@@ -499,8 +650,8 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="home" size={20} color="#6b7280" />
                 <TextInput
                   className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.street}
-                  onChangeText={(text) => handleInputChange('street', text)}
+                  value={formData.street_address}
+                  onChangeText={(text) => handleInputChange('street_address', text)}
                   placeholder="Street and house number"
                   placeholderTextColor="#9ca3af"
                 />
@@ -527,8 +678,8 @@ const RegistrationScreen = () => {
                 <MaterialIcons name="markunread-mailbox" size={20} color="#6b7280" />
                 <TextInput
                   className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.postalCode}
-                  onChangeText={(text) => handleInputChange('postalCode', text)}
+                  value={formData.postal_code}
+                  onChangeText={(text) => handleInputChange('postal_code', text)}
                   keyboardType="number-pad"
                   placeholder="Postal code"
                   placeholderTextColor="#9ca3af"
@@ -550,10 +701,10 @@ const RegistrationScreen = () => {
               <Text className="mb-1.5 text-sm font-medium text-gray-700">Address Proof</Text>
               <TouchableOpacity
                 className="h-36 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                onPress={() => handleDocumentUpload('addressProof')}>
-                {formData.addressProof ? (
+                onPress={() => handleDocumentUpload('residential_proof')}>
+                {formData.residential_proof ? (
                   <Image
-                    source={{ uri: formData.addressProof }}
+                    source={{ uri: formData.residential_proof }}
                     className="h-full w-full bg-gray-100"
                     resizeMode="contain"
                   />
@@ -571,10 +722,10 @@ const RegistrationScreen = () => {
               <Text className="mb-1.5 text-sm font-medium text-gray-700">Government ID</Text>
               <TouchableOpacity
                 className="h-36 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                onPress={() => handleDocumentUpload('governmentId')}>
-                {formData.governmentId ? (
+                onPress={() => handleDocumentUpload('government_id')}>
+                {formData.government_id ? (
                   <Image
-                    source={{ uri: formData.governmentId }}
+                    source={{ uri: formData.government_id }}
                     className="h-full w-full bg-gray-100"
                     resizeMode="contain"
                   />
@@ -588,22 +739,84 @@ const RegistrationScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <View className="mb-5">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Selfie Photograph</Text>
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Profile Photo</Text>
               <TouchableOpacity
-                className="h-36 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                onPress={() => handleDocumentUpload('selfie')}>
-                {formData.selfie ? (
+                className="h-32 items-center justify-center rounded-lg border border-gray-200 bg-gray-50"
+                onPress={() => handleImageUpload('profile_photo_url')}>
+                {formData.profile_photo_url ? (
                   <Image
-                    source={{ uri: formData.selfie }}
-                    className="h-full w-full rounded-full bg-gray-100"
-                    resizeMode="contain"
+                    source={{ uri: formData.profile_photo_url }}
+                    className="h-full w-full rounded-lg"
                   />
                 ) : (
                   <View className="items-center">
-                    <FontAwesome name="camera" size={32} color="#3b82f6" />
-                    <Text className="mt-2 font-medium text-blue-500">Take Selfie</Text>
-                    <Text className="mt-1 text-xs text-gray-400">Clear face photo</Text>
+                    <MaterialIcons name="add-a-photo" size={32} color="#3b82f6" />
+                    <Text className="mt-2 font-medium text-blue-500">Upload Profile Photo</Text>
+                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* License Photo */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">License Copy</Text>
+              <TouchableOpacity
+                className="h-32 items-center justify-center rounded-lg border border-gray-200 bg-gray-50"
+                onPress={() => handleImageUpload('license_photo_url')}>
+                {formData.license_photo_url ? (
+                  <Image
+                    source={{ uri: formData.license_photo_url }}
+                    className="h-full w-full rounded-lg"
+                  />
+                ) : (
+                  <View className="items-center">
+                    <MaterialIcons name="picture-as-pdf" size={32} color="#3b82f6" />
+                    <Text className="mt-2 font-medium text-blue-500">Upload License Copy</Text>
+                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Vehicle Photo */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Vehicle Photo</Text>
+              <TouchableOpacity
+                className="h-32 items-center justify-center rounded-lg border border-gray-200 bg-gray-50"
+                onPress={() => handleImageUpload('vehicle_photo_url')}>
+                {formData.vehicle_photo_url ? (
+                  <Image
+                    source={{ uri: formData.vehicle_photo_url }}
+                    className="h-full w-full rounded-lg"
+                  />
+                ) : (
+                  <View className="items-center">
+                    <MaterialIcons name="directions-car" size={32} color="#3b82f6" />
+                    <Text className="mt-2 font-medium text-blue-500">Upload Vehicle Photo</Text>
+                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Residential Proof */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Residential Proof</Text>
+              <TouchableOpacity
+                className="h-32 items-center justify-center rounded-lg border border-gray-200 bg-gray-50"
+                onPress={() => handleImageUpload('residential_proof')}>
+                {formData.residential_proof ? (
+                  <Image
+                    source={{ uri: formData.residential_proof }}
+                    className="h-full w-full rounded-lg"
+                  />
+                ) : (
+                  <View className="items-center">
+                    <MaterialIcons name="home-work" size={32} color="#3b82f6" />
+                    <Text className="mt-2 font-medium text-blue-500">Upload Residential Proof</Text>
+                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -611,310 +824,372 @@ const RegistrationScreen = () => {
           </View>
         );
 
-      case 4: // Vehicle Information
+      case 4: // Vehicle and Document Details
         return (
           <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
             <View className="mb-5">
-              <Text className="text-xl font-bold text-gray-900">Vehicle Information</Text>
-              <Text className="text-sm text-gray-500">Details about your vehicle</Text>
+              <Text className="text-xl font-bold text-gray-900">Vehicle & Documents</Text>
+              <Text className="text-sm text-gray-500">
+                Provide your vehicle and document details
+              </Text>
             </View>
 
+            {/* Vehicle Type */}
             <View className="mb-4">
               <Text className="mb-1.5 text-sm font-medium text-gray-700">Vehicle Type</Text>
-              <View className="flex-row items-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-                <MaterialIcons name="directions-car" size={20} color="#6b7280" className="ml-3" />
-
-                {Platform.OS === 'ios' ? (
-                  <>
-                    <TouchableOpacity
-                      className="h-12 flex-row items-center justify-between rounded-lg  px-4"
-                      onPress={() => setShowPicker(true)}
-                      activeOpacity={0.7}>
-                      <Text
-                        className={`${formData.vehicleType ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {formData.vehicleType || 'Select Vehicle Type'}
-                      </Text>
-                      <MaterialIcons name="keyboard-arrow-down" size={24} color="#6b7280" />
-                    </TouchableOpacity>
-
-                    <Modal
-                      visible={showPicker}
-                      transparent
-                      animationType="slide"
-                      onRequestClose={() => setShowPicker(false)}>
-                      <View className="flex-1 justify-end bg-black/50">
-                        <View className="rounded-t-xl bg-white p-4">
-                          {/* Header */}
-                          <View className="mb-2 flex-row items-center justify-between">
-                            <TouchableOpacity onPress={() => setShowPicker(false)}>
-                              <Text className="text-base text-blue-500">Cancel</Text>
-                            </TouchableOpacity>
-                            <Text className="font-medium text-gray-900">Select Vehicle</Text>
-                            <TouchableOpacity onPress={() => setShowPicker(false)}>
-                              <Text className="text-base text-blue-500">Done</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Options */}
-                          <View className="h-[250px]">
-                            {['Bicycle', 'Bike', 'Scooter', 'Car', 'Van'].map((option) => (
-                              <TouchableOpacity
-                                key={option}
-                                className={`rounded-md px-4 py-3 ${
-                                  formData.vehicleType === option.toLowerCase()
-                                    ? 'bg-blue-100'
-                                    : 'bg-transparent'
-                                }`}
-                                onPress={() => {
-                                  handleInputChange('vehicleType', option.toLowerCase());
-                                }}>
-                                <Text className="text-lg text-gray-800">{option}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-                      </View>
-                    </Modal>
-                  </>
-                ) : (
-                  // Android Picker
-                  <Picker
-                    style={{ flex: 1 }}
-                    dropdownIconColor="#6b7280"
-                    mode="dropdown"
-                    dropdownIconRippleColor="#d1d5db"
-                    numberOfLines={1}
-                    selectedValue={formData.vehicleType}
-                    onValueChange={(itemValue) => handleInputChange('vehicleType', itemValue)}>
-                    <Picker.Item
-                      label="Select Vehicle Type"
-                      value=""
-                      enabled={false}
-                      style={{ color: '#9ca3af' }}
-                    />
-                    <Picker.Item
-                      label="Bicycle"
-                      value="bicycle"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                    <Picker.Item
-                      label="Bike"
-                      value="bike"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                    <Picker.Item
-                      label="Scooter"
-                      value="scooter"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                    <Picker.Item
-                      label="Car"
-                      value="car"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                    <Picker.Item
-                      label="Van"
-                      value="van"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                  </Picker>
-                )}
-              </View>
-            </View>
-
-            <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Registration Number</Text>
               <View className="flex-row items-center rounded-lg border border-gray-200 bg-gray-50 px-3">
-                <MaterialIcons name="confirmation-number" size={20} color="#6b7280" />
-                <TextInput
-                  className="ml-2 h-12 flex-1 text-base text-gray-900"
-                  value={formData.vehicleRegistration}
-                  onChangeText={(text) => handleInputChange('vehicleRegistration', text)}
-                  placeholder="Vehicle registration number"
-                  placeholderTextColor="#9ca3af"
-                />
+                <MaterialIcons name="directions-car" size={20} color="#6b7280" />
+                <Picker
+                  selectedValue={formData.vehicle_type}
+                  onValueChange={(itemValue) => handleInputChange('vehicle_type', itemValue)}
+                  style={{ flex: 1 }}
+                  mode="dropdown">
+                  <Picker.Item label="Select Vehicle Type" value="" />
+                  <Picker.Item label="Bicycle" value="bicycle" />
+                  <Picker.Item label="Motorcycle" value="motorcycle" />
+                  <Picker.Item label="Car" value="car" />
+                  <Picker.Item label="Van" value="van" />
+                </Picker>
               </View>
             </View>
 
-            <View className="mb-5">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Vehicle Insurance</Text>
+            {/* Vehicle Number */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Vehicle Number</Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.vehicle_number}
+                onChangeText={(text) => handleInputChange('vehicle_number', text)}
+                placeholder="Enter vehicle registration number"
+              />
+            </View>
+
+            {/* License Number */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">License Number</Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.license_number}
+                onChangeText={(text) => handleInputChange('license_number', text)}
+                placeholder="Enter driving license number"
+              />
+            </View>
+
+            {/* License Expiry */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">License Expiry Date</Text>
               <TouchableOpacity
-                className="h-36 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                onPress={() => handleDocumentUpload('vehicleInsurance')}>
-                {formData.vehicleInsurance ? (
-                  <Image
-                    source={{ uri: formData.vehicleInsurance }}
-                    className="h-full w-full bg-gray-100"
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <View className="items-center">
-                    <FontAwesome name="file-text-o" size={32} color="#3b82f6" />
-                    <Text className="mt-2 font-medium text-blue-500">Upload Insurance</Text>
-                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
-                  </View>
-                )}
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+                onPress={() => setShowLicenseExpiryPicker(true)}>
+                <Text>
+                  {formData.license_expiry
+                    ? new Date(formData.license_expiry).toLocaleDateString()
+                    : 'Select expiry date'}
+                </Text>
               </TouchableOpacity>
+              {showLicenseExpiryPicker && (
+                <DateTimePicker
+                  value={formData.license_expiry ? new Date(formData.license_expiry) : new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, date) => {
+                    setShowLicenseExpiryPicker(false);
+                    if (date) {
+                      handleInputChange('license_expiry', date.toISOString().split('T')[0]);
+                    }
+                  }}
+                />
+              )}
             </View>
 
-            <View className="mb-5">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Driving License</Text>
+            {/* Insurance Number */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Insurance Number</Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.insurance_number}
+                onChangeText={(text) => handleInputChange('insurance_number', text)}
+                placeholder="Enter insurance policy number"
+              />
+            </View>
+
+            {/* Insurance Expiry */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">
+                Insurance Expiry Date
+              </Text>
               <TouchableOpacity
-                className="h-36 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                onPress={() => handleDocumentUpload('drivingLicense')}>
-                {formData.drivingLicense ? (
-                  <Image
-                    source={{ uri: formData.drivingLicense }}
-                    className="h-full w-full bg-gray-100"
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <View className="items-center">
-                    <FontAwesome name="id-card" size={32} color="#3b82f6" />
-                    <Text className="mt-2 font-medium text-blue-500">Upload License</Text>
-                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
-                  </View>
-                )}
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+                onPress={() => setShowInsuranceExpiryPicker(true)}>
+                <Text>
+                  {formData.insurance_expiry
+                    ? new Date(formData.insurance_expiry).toLocaleDateString()
+                    : 'Select expiry date'}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </View>
-        );
-
-      case 5: // Availability
-        return (
-          <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
-            <View className="mb-5">
-              <Text className="text-xl font-bold text-gray-900">Work Availability</Text>
-              <Text className="text-sm text-gray-500">When are you available?</Text>
-            </View>
-
-            <View className="mt-3">
-              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
-                (day) => (
-                  <View key={day} className="mb-3 flex-row items-center justify-between">
-                    <Text className="w-20 text-sm font-medium text-gray-700">{day}</Text>
-                    <View className="flex-1 flex-row justify-between">
-                      {['Morning', 'Afternoon', 'Evening'].map((slot) => (
-                        <TouchableOpacity
-                          key={slot}
-                          className={`rounded-md px-3 py-2 ${
-                            formData.availability[
-                              day.toLowerCase() as keyof typeof formData.availability
-                            ]?.[slot.toLowerCase() as 'morning' | 'afternoon' | 'evening']
-                              ? 'border-blue-500 bg-blue-500'
-                              : 'border-gray-200 bg-gray-50'
-                          } border`}
-                          onPress={() => {
-                            const updatedAvailability = { ...formData.availability };
-                            const dayKey = day.toLowerCase() as keyof typeof updatedAvailability;
-                            const slotKey = slot.toLowerCase() as
-                              | 'morning'
-                              | 'afternoon'
-                              | 'evening';
-
-                            updatedAvailability[dayKey][slotKey] =
-                              !updatedAvailability[dayKey][slotKey];
-
-                            handleInputChange('availability', updatedAvailability);
-                          }}>
-                          <Text
-                            className={`text-xs ${
-                              formData.availability[
-                                day.toLowerCase() as keyof typeof formData.availability
-                              ]?.[slot.toLowerCase() as 'morning' | 'afternoon' | 'evening']
-                                ? 'text-white'
-                                : 'text-gray-500'
-                            }`}>
-                            {slot}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )
+              {showInsuranceExpiryPicker && (
+                <DateTimePicker
+                  value={
+                    formData.insurance_expiry ? new Date(formData.insurance_expiry) : new Date()
+                  }
+                  mode="date"
+                  display="default"
+                  onChange={(event, date) => {
+                    setShowInsuranceExpiryPicker(false);
+                    if (date) {
+                      handleInputChange('insurance_expiry', date.toISOString().split('T')[0]);
+                    }
+                  }}
+                />
               )}
             </View>
           </View>
         );
 
-      case 6: // Review
+      case 5: // Visa and Additional Info
+        return (
+          <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
+            <View className="mb-5">
+              <Text className="text-xl font-bold text-gray-900">Visa & Additional Information</Text>
+              <Text className="text-sm text-gray-500">Provide your visa details</Text>
+            </View>
+
+            {/* Visa Type */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Visa Type</Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.visa_type}
+                onChangeText={(text) => handleInputChange('visa_type', text)}
+                placeholder="Enter your visa type"
+              />
+            </View>
+
+            {/* NI Number */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">
+                National Insurance Number
+              </Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.ni_number}
+                onChangeText={(text) => handleInputChange('ni_number', text)}
+                placeholder="Enter NI number"
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Student Visa */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Student Visa Holder</Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.student_visa}
+                onChangeText={(text) => handleInputChange('student_visa', text)}
+                placeholder="Enter NI number"
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* PSW Visa */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">PSW Visa Holder</Text>
+              <TextInput
+                className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
+                value={formData.psw_visa}
+                onChangeText={(value) => handleInputChange('psw_visa', value)}
+                placeholder="Enter NI number"
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Availability Schedule */}
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">
+                Availability Schedule
+              </Text>
+              <View className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
+                  (day) => {
+                    const lowerDay = day.toLowerCase() as Day;
+
+                    return (
+                      <View key={day} className="mb-2 flex-row items-center justify-between">
+                        <Text className="text-gray-700">{day}</Text>
+                        <View className="flex-row">
+                          {['Morning', 'Afternoon', 'Evening'].map((slot) => {
+                            const lowerSlot = slot.toLowerCase() as TimeSlot;
+
+                            return (
+                              <TouchableOpacity
+                                key={slot}
+                                className={`ml-2 rounded px-2 py-1 ${
+                                  formData.availability_schedule[lowerDay][lowerSlot]
+                                    ? 'bg-blue-500'
+                                    : 'bg-gray-200'
+                                }`}
+                                onPress={() => {
+                                  const updated = { ...formData.availability_schedule };
+                                  updated[lowerDay] = {
+                                    ...updated[lowerDay],
+                                    [lowerSlot]: !updated[lowerDay][lowerSlot],
+                                  };
+                                  handleInputChange('availability_schedule', updated);
+                                }}>
+                                <Text
+                                  className={`text-xs ${
+                                    formData.availability_schedule[lowerDay][lowerSlot]
+                                      ? 'text-white'
+                                      : 'text-gray-600'
+                                  }`}>
+                                  {slot}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  }
+                )}
+              </View>
+            </View>
+          </View>
+        );
+      case 6:
         return (
           <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
             <View className="mb-5">
               <Text className="text-xl font-bold text-gray-900">Review Your Information</Text>
-              <Text className="text-sm text-gray-500">Check all details before submitting</Text>
+              <Text className="text-sm text-gray-500">
+                Please verify all details before submission
+              </Text>
             </View>
 
-            <ScrollView className="max-h-96">
-              <View className="mb-6">
-                <Text className="mb-3 border-b border-gray-200 pb-1.5 text-base font-bold text-gray-900">
-                  Personal Details
-                </Text>
-                <ReviewItem label="Full Name" value={formData.fullName} icon="person" />
+            <ScrollView className="max-h-96" showsVerticalScrollIndicator={false}>
+              {/* Personal Details Section */}
+              <View className="mb-6 rounded-lg border border-gray-100 p-4">
+                <View className="mb-3 flex-row items-center">
+                  <MaterialIcons name="person-outline" size={20} color="#6b7280" />
+                  <Text className="ml-2 text-base font-semibold text-gray-900">
+                    Personal Details
+                  </Text>
+                </View>
+                <ReviewItem label="Full Name" value={formData.full_name} icon="person" />
                 <ReviewItem
                   label="Date of Birth"
-                  value={formData.dateOfBirth.toDateString()}
+                  value={formData.DOB ? formData.DOB.toDateString() : 'Not provided'}
                   icon="event"
                 />
-                <ReviewItem label="Gender" value={formData.gender} icon="transgender" />
+                <ReviewItem
+                  label="Gender"
+                  value={formData.gender || 'Not specified'}
+                  icon="transgender"
+                />
               </View>
 
-              <View className="mb-6">
-                <Text className="mb-3 border-b border-gray-200 pb-1.5 text-base font-bold text-gray-900">
-                  Contact Information
-                </Text>
-                <ReviewItem label="Phone Number" value={formData.phoneNumber} icon="phone" />
-                <ReviewItem label="Email" value={formData.email} icon="email" />
+              {/* Contact Information Section */}
+              <View className="mb-6 rounded-lg border border-gray-100 p-4">
+                <View className="mb-3 flex-row items-center">
+                  <MaterialIcons name="contact-phone" size={20} color="#6b7280" />
+                  <Text className="ml-2 text-base font-semibold text-gray-900">
+                    Contact Information
+                  </Text>
+                </View>
+                <ReviewItem label="Phone Number" value={formData.phone_number} icon="phone" />
+                <ReviewItem label="Email" value={formData.email || 'Not provided'} icon="email" />
                 <ReviewItem
                   label="Emergency Contact"
-                  value={`${formData.emergencyContactName} (${formData.emergencyContactPhone})`}
+                  value={
+                    formData.emergency_contact_name
+                      ? `${formData.emergency_contact_name} (${formData.emergency_contact_number})`
+                      : 'Not provided'
+                  }
                   icon="contact-emergency"
                 />
               </View>
 
-              <View className="mb-6">
-                <Text className="mb-3 border-b border-gray-200 pb-1.5 text-base font-bold text-gray-900">
-                  Address
-                </Text>
-                <ReviewItem label="Street" value={formData.street} icon="home" />
+              {/* Address Section */}
+              <View className="mb-6 rounded-lg border border-gray-100 p-4">
+                <View className="mb-3 flex-row items-center">
+                  <MaterialIcons name="location-on" size={20} color="#6b7280" />
+                  <Text className="ml-2 text-base font-semibold text-gray-900">Address</Text>
+                </View>
+                <ReviewItem label="Street" value={formData.street_address} icon="home" />
                 <ReviewItem label="City" value={formData.city} icon="location-city" />
                 <ReviewItem
                   label="Postal Code"
-                  value={formData.postalCode}
+                  value={formData.postal_code}
                   icon="markunread-mailbox"
                 />
+                {/* {formData.additional_address_info && (
+            <ReviewItem 
+              label="Additional Info" 
+              value={formData.additionalAddressInfo} 
+              icon="info-outline" 
+            />
+          )} */}
               </View>
 
-              <View className="mb-6">
-                <Text className="mb-3 border-b border-gray-200 pb-1.5 text-base font-bold text-gray-900">
-                  Vehicle Information
-                </Text>
-                <ReviewItem
-                  label="Vehicle Type"
-                  value={formData.vehicleType}
-                  icon="directions-car"
-                />
-                <ReviewItem
-                  label="Registration"
-                  value={formData.vehicleRegistration}
-                  icon="confirmation-number"
-                />
-              </View>
+              {/* Vehicle Information Section */}
+              {formData.vehicle_type && (
+                <View className="mb-6 rounded-lg border border-gray-100 p-4">
+                  <View className="mb-3 flex-row items-center">
+                    <MaterialIcons name="directions-car" size={20} color="#6b7280" />
+                    <Text className="ml-2 text-base font-semibold text-gray-900">
+                      Vehicle Information
+                    </Text>
+                  </View>
+                  <ReviewItem
+                    label="Vehicle Type"
+                    value={formData.vehicle_type}
+                    icon="directions-car"
+                  />
+                  {/* <ReviewItem 
+              label="Registration" 
+              value={formData.vehicle_registration} 
+              icon="confirmation-number" 
+            /> */}
+                  {/* {/* {formData.vehicleMake && (
+              <ReviewItem label="Make" value={formData.vehicleMake} icon="build" />
+            )} */}
+                  {formData.government_id && (
+                    <ReviewItem label="Model" value={formData.government_id} icon="time-to-leave" />
+                  )}
+                </View>
+              )}
 
-              <View className="mb-6">
-                <Text className="mb-3 border-b border-gray-200 pb-1.5 text-base font-bold text-gray-900">
-                  Documents
-                </Text>
-                <ReviewDocument label="Address Proof" value={formData.addressProof} />
-                <ReviewDocument label="Government ID" value={formData.governmentId} />
-                <ReviewDocument label="Selfie" value={formData.selfie} />
-                <ReviewDocument label="Vehicle Insurance" value={formData.vehicleInsurance} />
-                <ReviewDocument label="Driving License" value={formData.drivingLicense} />
+              {/* Documents Section */}
+              <View className="mb-6 rounded-lg border border-gray-100 p-4">
+                <View className="mb-3 flex-row items-center">
+                  <MaterialIcons name="folder" size={20} color="#6b7280" />
+                  <Text className="ml-2 text-base font-semibold text-gray-900">Documents</Text>
+                </View>
+                <View className="grid gap-3">
+                  <ReviewDocument label="Address Proof" value={formData.residential_proof} />
+                  <ReviewDocument label="Selfie" value={formData.profile_photo_url} />
+                  {/* {formData.vehicle_insurance && (
+              <ReviewDocument 
+                label="Vehicle Insurance" 
+                value={formData.vehicleInsurance} 
+                onPress={() => handleViewDocument(formData.vehicleInsurance)} 
+              />
+            )} */}
+                  <ReviewDocument label="Driving License" value={formData.license_photo_url} />
+                </View>
               </View>
             </ScrollView>
+
+            {/* Edit Button */}
+            <TouchableOpacity
+              className="mt-4 flex-row items-center justify-center"
+              onPress={() => setCurrentStep(0)} // Go back to first step
+            >
+              <MaterialIcons name="edit" size={18} color="#3b82f6" />
+              <Text className="ml-2 text-blue-500">Edit Information</Text>
+            </TouchableOpacity>
           </View>
         );
-
       default:
         return null;
     }
@@ -941,15 +1216,187 @@ const RegistrationScreen = () => {
       </View>
     </View>
   );
-
-  const handleNext = () => {
+  const initialFormState = {
+    full_name: '',
+    gender: 'male',
+    phone_number: '',
+    email: '',
+    DOB: new Date(),
+    emergency_contact_name: '',
+    emergency_contact_number: '',
+    street_address: '',
+    city: '',
+    postal_code: '',
+    government_id: null,
+    residential_proof: null,
+    vehicle_type: 'bicycle',
+    vehicle_number: '',
+    license_number: '',
+    license_expiry: new Date(),
+    insurance_number: '',
+    insurance_expiry: new Date(),
+    license_photo_url: null,
+    vehicle_photo_url: null,
+    visa_type: '',
+    ni_number: '',
+    student_visa: '',
+    psw_visa: '',
+    profile_photo_url: null,
+    availability_schedule: {
+      monday: { morning: false, afternoon: false, evening: false },
+      tuesday: { morning: false, afternoon: false, evening: false },
+      wednesday: { morning: false, afternoon: false, evening: false },
+      thursday: { morning: false, afternoon: false, evening: false },
+      friday: { morning: false, afternoon: false, evening: false },
+      saturday: { morning: false, afternoon: false, evening: false },
+      sunday: { morning: false, afternoon: false, evening: false },
+    },
+    availability_status: 'offline',
+    verification_status: 'pending',
+    onboarding_completed: false,
+    total_deliveries: 0,
+    successful_deliveries: 0,
+    rating_average: 0.0,
+    total_ratings: 0,
+    commission_rate: 0.15,
+  };
+  const handleNext = async () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
-    } else {
-      // Submit form
-      console.log('Form submitted:', formData);
-      // Add your form submission logic here
+      return;
     }
+
+    // Submit form
+    try {
+      // Prepare form data for submission
+      const submissionData = prepareSubmissionData(formData);
+
+      // Show loading state
+      setIsSubmitting(true);
+      console.log(submissionData);
+      // Make API request
+      const response = await axios.post(
+        `${backendUrl}/delivery-partner/auth/register`,
+        submissionData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${tempToken}`,
+          },
+          withCredentials: true,
+        }
+      );
+
+      // Handle success
+      if (response.status === 200 || response.status === 201) {
+        Alert.alert('Success', 'Your application has been submitted successfully!', [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate(ROUTES.DASHBOARD),
+          },
+        ]);
+        // setFormData(initialFormState); // Reset form if needed
+      } else {
+        throw new Error('Unexpected response status');
+      }
+    } catch (error) {
+      // Handle error
+      console.error('Submission error:', error);
+      Alert.alert(
+        'Submission Failed',
+        error.response?.data?.message ||
+          error.message ||
+          'An error occurred while submitting your application. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Helper function to prepare form data for submission
+  const prepareSubmissionData = (data: any) => {
+    const formData = new FormData();
+
+    // Personal Information
+    formData.append('full_name', data.full_name);
+    formData.append('gender', data.gender);
+    formData.append('phone_number', data.phone_number);
+    formData.append('email', data.email);
+    formData.append('DOB', data.DOB.toISOString().split('T')[0]); // Format as YYYY-MM-DD
+
+    // Contact Information
+    formData.append('emergency_contact_name', data.emergency_contact_name);
+    formData.append('emergency_contact_number', data.emergency_contact_number);
+
+    // Address Information
+    formData.append('street_address', data.street_address);
+    formData.append('city', data.city);
+    formData.append('postal_code', data.postal_code);
+
+    // Vehicle Information
+    formData.append('vehicle_type', data.vehicle_type);
+    formData.append('vehicle_number', data.vehicle_number);
+    formData.append('license_number', data.license_number);
+    formData.append('license_expiry', data.license_expiry);
+    formData.append('insurance_number', data.insurance_number);
+    formData.append('insurance_expiry', data.insurance_expiry);
+
+    // Visa Information
+    formData.append('visa_type', data.visa_type);
+    formData.append('ni_number', data.ni_number);
+    formData.append('student_visa', data.student_visa);
+    formData.append('psw_visa', data.psw_visa);
+
+    // Append files if they exist
+    if (data.government_id) {
+      formData.append('government_id', {
+        uri: data.government_id,
+        type: 'image/jpeg', // or get actual mime type
+        name: 'government_id.jpg',
+      });
+    }
+
+    if (data.residential_proof) {
+      formData.append('residential_proof', {
+        uri: data.residential_proof,
+        type: 'image/jpeg',
+        name: 'residential_proof.jpg',
+      });
+    }
+
+    if (data.license_photo_url) {
+      formData.append('license_photo_url', {
+        uri: data.license_photo_url,
+        type: 'image/jpeg',
+        name: 'license_photo.jpg',
+      });
+    }
+
+    if (data.vehicle_photo_url) {
+      formData.append('vehicle_photo_url', {
+        uri: data.vehicle_photo_url,
+        type: 'image/jpeg',
+        name: 'vehicle_photo.jpg',
+      });
+    }
+
+    if (data.profile_photo_url) {
+      formData.append('profile_photo_url', {
+        uri: data.profile_photo_url,
+        type: 'image/jpeg',
+        name: 'profile_photo.jpg',
+      });
+    }
+
+    // Availability Schedule
+    formData.append('availability_schedule', JSON.stringify(data.availability_schedule));
+
+    // System Fields
+    formData.append('verification_status', data.verification_status);
+    formData.append('commission_rate', data.commission_rate.toString());
+
+    return formData;
   };
 
   const handleBack = () => {
@@ -1059,12 +1506,19 @@ const RegistrationScreen = () => {
           className={`flex-1 flex-row items-center justify-center rounded-lg px-5 py-3 ${
             currentStep === steps.length - 1 ? 'bg-green-500' : 'bg-blue-500'
           } ${currentStep > 0 ? 'ml-3' : ''}`}
-          onPress={handleNext}>
-          <Text className="font-medium text-white">
-            {currentStep === steps.length - 1 ? 'Submit Application' : 'Continue'}
-          </Text>
-          {currentStep < steps.length - 1 && (
-            <Ionicons name="arrow-forward" size={20} color="white" className="ml-2" />
+          onPress={handleNext}
+          disabled={isSubmitting}>
+          {isSubmitting ? (
+            <ActivityIndicator color="#ffffff" size="small" />
+          ) : (
+            <>
+              <Text className="font-medium text-white">
+                {currentStep === steps.length - 1 ? 'Submit Application' : 'Continue'}
+              </Text>
+              {currentStep < steps.length - 1 && (
+                <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 8 }} />
+              )}
+            </>
           )}
         </TouchableOpacity>
       </View>
