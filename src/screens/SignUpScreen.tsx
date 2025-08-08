@@ -62,52 +62,52 @@ const SignUpScreen = () => {
       return Alert.alert('Validation Error', 'Passwords do not match');
     if (!formData.vehicleType)
       return Alert.alert('Validation Error', 'Please select your vehicle type');
-
-    setIsLoading(true);
-    try {
-      const response = await axios.post(
-        `${backendUrl}/delivery-partner/auth/signup`,
-        {
-          fullName: formData.fullName,
-          email: formData.email,
-          mobile: formData.mobile,
-          password: formData.password,
-          vehicleType: formData.vehicleType,
-        },
-        {
-          withCredentials: true,
-        }
-      );
-      console.log(response.data)
-      if (response.data.success) {
-        // Update Redux state with user information
-  const { partner_id, temp_token } = response.data;
-
-  dispatch(setPhone(formData.mobile));
-  dispatch(
-    setEmailCredentials({
+console.log(backendUrl);
+setIsLoading(true);
+try {
+  const response = await axios.post(
+    `${backendUrl}/delivery-partner/auth/signup`,
+    {
+      fullName: formData.fullName,
       email: formData.email,
+      mobile: formData.mobile,
       password: formData.password,
-    })
-  );
-  dispatch(setSignedUp());
-
-  // 🔥 NEW: Store temp_token and partner_id
-  dispatch(setTempToken({ token: temp_token, partnerId: partner_id }));
-
-  navigation.navigate(ROUTES.OTP, {
-    phone: formData.mobile,
-    email: formData.email,
-  });
-      } else {
-        Alert.alert('Sign Up Failed', response.data.message || 'Registration failed');
-      }
-    } catch (error: any) {
-      const errMsg = error.response?.data?.message || error.message || 'Something went wrong';
-      Alert.alert('Sign Up Failed', errMsg);
-    } finally {
-      setIsLoading(false);
+      vehicleType: formData.vehicleType,
+    },
+    {
+      withCredentials: true,
     }
+  );
+  console.log(response.data);
+  if (response.data.success) {
+    // Update Redux state with user information
+    const { partner_id, temp_token } = response.data;
+
+    dispatch(setPhone(formData.mobile));
+    dispatch(
+      setEmailCredentials({
+        email: formData.email,
+        password: formData.password,
+      })
+    );
+    dispatch(setSignedUp());
+
+    // 🔥 NEW: Store temp_token and partner_id
+    dispatch(setTempToken({ token: temp_token, userID: partner_id }));
+
+    navigation.navigate(ROUTES.OTP, {
+      phone: formData.mobile,
+      email: formData.email,
+    });
+  } else {
+    Alert.alert('Sign Up Failed', response.data.message || 'Registration failed');
+  }
+} catch (error: any) {
+  const errMsg = error.response?.data?.message || error.message || 'Something went wrong';
+  Alert.alert('Sign Up Failed', errMsg);
+} finally {
+  setIsLoading(false);
+}
   };
 
   return (

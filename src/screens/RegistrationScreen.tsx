@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { use, useState } from 'react';
 import {
   View,
   Text,
@@ -18,15 +18,15 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, FontAwesome, Ionicons } from '@expo/vector-icons';
-import { ImagePickerResponse } from 'react-native-image-picker';
 import axios from 'axios';
 import { ActivityIndicator } from 'react-native-paper';
 import Constants from 'expo-constants';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '~/redux/store';
 import { ROUTES } from '~/constants/routes';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '~/navigations/types';
+import { setSignUpToken } from '~/redux/features/auth/authSlice';
 
 interface FormData {
   // Personal Information
@@ -59,9 +59,9 @@ interface FormData {
 
   // Visa Information
   visa_type: string | boolean;
-  ni_number: string;
-  student_visa: string | boolean | null;
-  psw_visa: string | boolean | null;
+  ni_number: number | null;
+  student_visa: number | boolean | null;
+  psw_visa: number | boolean | null;
 
   // Documents
   profile_photo_url: string | null;
@@ -113,6 +113,7 @@ const RegistrationScreen = () => {
   const [showInsuranceExpiryPicker, setShowInsuranceExpiryPicker] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     // Personal Information
     full_name: '',
@@ -144,9 +145,9 @@ const RegistrationScreen = () => {
 
     // Visa Information
     visa_type: '',
-    ni_number: '',
-    student_visa: '',
-    psw_visa: '',
+    ni_number: 0,
+    student_visa: 0,
+    psw_visa: 0,
 
     // Documents
     profile_photo_url: null,
@@ -173,7 +174,8 @@ const RegistrationScreen = () => {
     commission_rate: 0.15,
   });
   const backendUrl = Constants.expoConfig?.extra?.backendUrl;
-  const tempToken = useSelector((state: RootState) => state.auth.tempToken);
+  const registrationToken = useSelector((state: RootState) => state.auth.registrationToken);
+  const userID = useSelector((state: RootState) => state.auth.userID);
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   const vehicleOptions: VehicleOption[] = [
@@ -972,8 +974,10 @@ const RegistrationScreen = () => {
               </Text>
               <TextInput
                 className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
-                value={formData.ni_number}
-                onChangeText={(text) => handleInputChange('ni_number', text)}
+                value={formData.ni_number.toString() || ''}
+                onChangeText={(text) =>
+                  handleInputChange('ni_number', text === '' ? null : Number(text))
+                }
                 placeholder="Enter NI number"
                 keyboardType="numeric"
               />
@@ -981,24 +985,28 @@ const RegistrationScreen = () => {
 
             {/* Student Visa */}
             <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Student Visa Holder</Text>
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Student Visa Number</Text>
               <TextInput
                 className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
-                value={formData.student_visa}
-                onChangeText={(text) => handleInputChange('student_visa', text)}
-                placeholder="Enter NI number"
+                value={formData.student_visa !== null ? String(formData.student_visa) : ''}
+                onChangeText={(text) =>
+                  handleInputChange('student_visa', text === '' ? null : Number(text))
+                }
+                placeholder="Enter Student Visa number"
                 keyboardType="numeric"
               />
             </View>
 
             {/* PSW Visa */}
             <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">PSW Visa Holder</Text>
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">PSW Visa Number</Text>
               <TextInput
                 className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
-                value={formData.psw_visa}
-                onChangeText={(value) => handleInputChange('psw_visa', value)}
-                placeholder="Enter NI number"
+                value={formData.psw_visa?.toString() || ''}
+                onChangeText={(value) =>
+                  handleInputChange('psw_visa', value === '' ? null : Number(value))
+                }
+                placeholder="Enter PSW Visa number"
                 keyboardType="numeric"
               />
             </View>
@@ -1281,27 +1289,26 @@ const RegistrationScreen = () => {
         {
           headers: {
             'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${tempToken}`,
+            Authorization: `Bearer ${registrationToken}`,
           },
           withCredentials: true,
         }
       );
-
+      console.log(response);
       // Handle success
-      if (response.status === 200 || response.status === 201) {
-        Alert.alert('Success', 'Your application has been submitted successfully!', [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate(ROUTES.DASHBOARD),
-          },
-        ]);
+      if (response.data.success) {
+        Alert.alert('Success', 'Your application has been submitted successfully!');
+        dispatch(setSignUpToken({ token: response.data.token }));
+        setTimeout(() => {
+          navigation.navigate(ROUTES.DASHBOARD);
+        }, 1000);
         // setFormData(initialFormState); // Reset form if needed
       } else {
         throw new Error('Unexpected response status');
       }
     } catch (error) {
       // Handle error
-      console.error('Submission error:', error);
+      console.log('Submission error:', error.response.data.message || error.message);
       Alert.alert(
         'Submission Failed',
         error.response?.data?.message ||

@@ -8,8 +8,11 @@ interface AuthState {
   isLoggedIn: boolean;
   otpVerified: boolean;
   method: 'phone' | 'email' | 'google' | null;
-   tempToken?: string;
-  partnerId?: string;
+  tempToken?: string;
+  userID?: string;
+  registrationToken?: string;
+  SignUpToken?: string;
+  userData: any | null;
 }
 
 const initialState: AuthState = {
@@ -20,8 +23,11 @@ const initialState: AuthState = {
   isLoggedIn: false,
   otpVerified: false,
   method: null,
-    tempToken: undefined,
-  partnerId: undefined,
+  tempToken: undefined,
+  userID: undefined,
+  registrationToken: undefined,
+  SignUpToken: undefined,
+  userData: null,
 };
 
 const authSlice = createSlice({
@@ -72,12 +78,19 @@ const authSlice = createSlice({
       state.otpVerified = false;
       state.method = null;
     },
-        setTempToken: (
-      state,
-      action: PayloadAction<{ token: string; partnerId: string }>
-    ) => {
+    setTempToken: (state, action: PayloadAction<{ token: string; userID: string }>) => {
       state.tempToken = action.payload.token;
-      state.partnerId = action.payload.partnerId;
+      state.userID = action.payload.userID;
+    },
+    setRegistrationToken: (state, action: PayloadAction<{ token: string; userID: string }>) => {
+      state.registrationToken = action.payload.token;
+      state.userID = action.payload.userID;
+    },
+    setSignUpToken: (state, action: PayloadAction<{ token: string }>) => {
+      state.SignUpToken = action.payload.token;
+    },
+    setUserData: (state, action: PayloadAction<any>) => {
+      state.userData = action.payload;
     },
   },
 });
@@ -90,7 +103,10 @@ export const {
   setSignedUp,
   login,
   logout,
-  setTempToken
+  setTempToken,
+  setSignUpToken,
+  setRegistrationToken,
+  setUserData,
 } = authSlice.actions;
 
 export default authSlice.reducer;

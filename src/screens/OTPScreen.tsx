@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ROUTES } from '~/constants/routes';
 import { RootStackParamList } from '~/navigations/types';
 import axios from 'axios';
-import { verifyOTP } from '~/redux/features/auth/authSlice';
+import { setRegistrationToken, verifyOTP } from '~/redux/features/auth/authSlice';
 import { useDispatch } from 'react-redux';
 import Constants from 'expo-constants';
 import { useSelector } from 'react-redux';
@@ -30,6 +30,7 @@ const OTPScreen: React.FC<OTPScreenProps> = ({ route }) => {
   const { phone, email } = route.params;
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const tempToken = useSelector((state: RootState) => state.auth.tempToken);
+  const userID = useSelector((state: RootState) => state.auth.userID);
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [timer, setTimer] = useState<number>(60);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -129,11 +130,11 @@ const OTPScreen: React.FC<OTPScreenProps> = ({ route }) => {
     setIsLoading(true);
 
     try {
-      console.log(backendUrl);
+      console.log(tempToken);
       const response = await axios.post(
         `${backendUrl}/delivery-partner/auth/verify-otp`,
         {
-          phone, // or email, depending on your verification method
+          user_id: userID, // or email, depending on your verification method
           otp: code,
         },
         {
@@ -148,7 +149,12 @@ const OTPScreen: React.FC<OTPScreenProps> = ({ route }) => {
         // Update Redux state
         dispatch(verifyOTP());
         // dispatch(login()); // Mark user as logged in
-
+        dispatch(
+          setRegistrationToken({
+            token: response.data.registration_token,
+            userID: response.data.user_id,
+          })
+        );
         // Navigate to appropriate screen
         navigation.navigate(ROUTES.REGISTRATION);
       } else {

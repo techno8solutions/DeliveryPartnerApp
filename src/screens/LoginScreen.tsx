@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch } from 'react-redux';
-import { setPhone } from '../redux/features/auth/authSlice';
+import { setPhone, setSignUpToken, setUserData } from '../redux/features/auth/authSlice';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigations/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ROUTES } from '~/constants/routes';
 import { COLORS } from '~/constants/colors';
 import { Dispatch } from '@reduxjs/toolkit';
+import axios from 'axios';
+import Constants from 'expo-constants';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -16,6 +18,7 @@ const LoginScreen = () => {
   const [input, setInput] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const backendUrl = Constants.expoConfig?.extra?.backendUrl;
 
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const dispatch: Dispatch<any> = useDispatch();
@@ -27,31 +30,62 @@ const LoginScreen = () => {
   const isPhoneLogin = isValidPhone(input);
   const isEmailLogin = isValidEmail(input);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!input || input.trim() === '') {
+      Alert.alert('Input Required', 'Please enter your email or phone number.');
+      return;
+    }
+
     if (isPhoneLogin) {
+      // Assuming phone-based login goes through a different flow
       setIsLoading(true);
       dispatch(setPhone(input));
-      setTimeout(() => {
-        setIsLoading(false);
-        navigation.navigate(ROUTES.OTP, { phone: input });
-      }, 1000);
-    } else if (isEmailLogin) {
-      if (!isStrongPassword(password)) {
+      setIsLoading(false);
+      // Navigate to OTP screen or similar
+      return;
+    }
+
+    if (isEmailLogin) {
+      if (!password || !isStrongPassword(password)) {
         Alert.alert(
           'Weak Password',
           'Password must be at least 8 characters long and include uppercase, lowercase, and numbers.'
         );
         return;
       }
+
       setIsLoading(true);
-      setTimeout(() => {
+
+      try {
+        const response = await axios.post(`${backendUrl}/delivery-partner/auth/login`, {
+          email: input,
+          password,
+        });
+
+        const { token, partner, user } = response.data;
+        console.log(response.data);
+        // Save token and partner data to store
+        dispatch(setSignUpToken(token));
+        dispatch(setUserData({ partner: partner, user: user }));
+
         setIsLoading(false);
-        // dispatch(authenticate());
-        // navigation.navigate(ROUTES.HOME); // Add if needed
-      }, 1000);
-    } else {
-      Alert.alert('Invalid Input', 'Please enter a valid phone number or email address');
+        Alert.alert('Success', 'Login successful');
+        navigation.navigate(ROUTES.DASHBOARD); // Update route as needed
+      } catch (error) {
+        console.error('Login error:', error.response?.data || error.message);
+        setIsLoading(false);
+
+        if (error.response?.data?.message) {
+          Alert.alert('Login Failed', error.response.data.message);
+        } else {
+          Alert.alert('Login Failed', 'Something went wrong');
+        }
+      }
+
+      return;
     }
+
+    Alert.alert('Invalid Input', 'Please select a login method.');
   };
 
   const handleGoogleLogin = () => {
@@ -66,7 +100,7 @@ const LoginScreen = () => {
   return (
     <SafeAreaView className="bg-background flex-1 justify-center px-6">
       <View className="mb-8 items-center">
-        <Image source={require('../assets/delivery-boy.png')} className='w-60 h-60 mb-10' />
+        <Image source={require('../assets/delivery-boy.png')} className="mb-10 h-60 w-60" />
         <Text className="mb-2 text-3xl font-bold" style={{ color: COLORS.textDark }}>
           DeliveryMate
         </Text>
