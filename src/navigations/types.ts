@@ -13,4 +13,5 @@ export type RootStackParamList = {
   History: undefined;
   Support: undefined;
   Availability: undefined;
+  ProfileReview: undefined;
 };

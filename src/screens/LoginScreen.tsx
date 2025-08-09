@@ -70,7 +70,15 @@ const LoginScreen = () => {
 
         setIsLoading(false);
         Alert.alert('Success', 'Login successful');
-        navigation.navigate(ROUTES.DASHBOARD); // Update route as needed
+          if (!user.is_verified) {
+            navigation.replace(ROUTES.PROFILE_REVIEW);
+          } else if (!user.is_email_verified) {
+            navigation.replace(ROUTES.OTP, { email: user.email, phone: user.phone });
+          } else if (!user.is_registered) {
+            navigation.replace(ROUTES.REGISTRATION);
+          } else {
+            navigation.replace(ROUTES.DASHBOARD);
+          }
       } catch (error) {
         console.error('Login error:', error.response?.data || error.message);
         setIsLoading(false);

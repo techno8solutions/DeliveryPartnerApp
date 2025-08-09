@@ -13,4 +13,5 @@ export const ROUTES = {
   HISTORY: 'History',
   SUPPORT: 'Support',
   AVAILABILITY: 'Availability',
+  PROFILE_REVIEW: 'ProfileReview',
 } as const;

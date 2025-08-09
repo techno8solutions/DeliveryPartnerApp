@@ -12,24 +12,23 @@ import RegistrationScreen from '~/screens/RegistrationScreen';
 import { ROUTES } from '../constants/routes';
 import { RootStackParamList } from './types';
 import NotificationScreen from '~/screens/NotificationScreen';
+import ProfileReviewScreen from '~/screens/ProfileReviewScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const Navigation = () => {
-  const { isSignedUp, isLoggedIn, otpVerified } = useSelector((state: RootState) => state.auth);
+  const { userData, isLoggedIn } = useSelector((state: RootState) => state.auth);
 
   let initialRoute: keyof RootStackParamList = ROUTES.SIGNUP;
 
-  if (isSignedUp && !isLoggedIn) {
-    initialRoute = ROUTES.REGISTRATION;
-  }
-
-  if (isSignedUp && isLoggedIn && !otpVerified) {
-    initialRoute = ROUTES.OTP;
-  }
-
-  if (isSignedUp && isLoggedIn && otpVerified) {
-    initialRoute = ROUTES.DASHBOARD;
+  if (isLoggedIn && userData?.user) {
+    if (!userData.user.is_verified) {
+      initialRoute = ROUTES.OTP;
+    } else if (!userData.user.is_registered) {
+      initialRoute = ROUTES.REGISTRATION;
+    } else {
+      initialRoute = ROUTES.DASHBOARD;
+    }
   }
 
   return (
@@ -41,9 +40,11 @@ const Navigation = () => {
         <Stack.Screen name={ROUTES.OTP} component={OTPScreen} />
         <Stack.Screen name={ROUTES.DASHBOARD} component={DashboardScreen} />
         <Stack.Screen name={ROUTES.NOTFICATION} component={NotificationScreen} />
+        <Stack.Screen name={ROUTES.PROFILE_REVIEW} component={ProfileReviewScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 };
+
 
 export default Navigation;

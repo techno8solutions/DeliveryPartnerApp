@@ -699,26 +699,6 @@ const RegistrationScreen = () => {
               <Text className="text-sm text-gray-500">Upload required documents</Text>
             </View>
 
-            <View className="mb-5">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Address Proof</Text>
-              <TouchableOpacity
-                className="h-36 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-                onPress={() => handleDocumentUpload('residential_proof')}>
-                {formData.residential_proof ? (
-                  <Image
-                    source={{ uri: formData.residential_proof }}
-                    className="h-full w-full bg-gray-100"
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <View className="items-center">
-                    <FontAwesome name="file-image-o" size={32} color="#3b82f6" />
-                    <Text className="mt-2 font-medium text-blue-500">Upload Address Proof</Text>
-                    <Text className="mt-1 text-xs text-gray-400">JPG, PNG or PDF</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
 
             <View className="mb-5">
               <Text className="mb-1.5 text-sm font-medium text-gray-700">Government ID</Text>
@@ -1268,140 +1248,137 @@ const RegistrationScreen = () => {
     total_ratings: 0,
     commission_rate: 0.15,
   };
-  const handleNext = async () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
-      return;
-    }
+const handleNext = async () => {
+  if (currentStep < steps.length - 1) {
+    setCurrentStep(currentStep + 1);
+    return;
+  }
 
-    // Submit form
-    try {
-      // Prepare form data for submission
-      const submissionData = prepareSubmissionData(formData);
+  try {
+    setIsSubmitting(true);
+    const submissionData = prepareSubmissionData(formData);
 
-      // Show loading state
-      setIsSubmitting(true);
-      console.log(submissionData);
-      // Make API request
-      const response = await axios.post(
-        `${backendUrl}/delivery-partner/auth/register`,
-        submissionData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${registrationToken}`,
-          },
-          withCredentials: true,
+    // Create a new FormData instance
+    const formDataToSend = new FormData();
+
+    // Append all fields
+    Object.entries(submissionData).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        if (typeof value === 'object' && value.uri) {
+          // Handle file objects
+          formDataToSend.append(key, {
+            uri: value.uri,
+            type: value.type || 'image/jpeg',
+            name: value.name || `${key}.jpg`,
+          });
+        } else {
+          // Handle regular fields
+          formDataToSend.append(key, String(value));
         }
-      );
-      console.log(response);
-      // Handle success
-      if (response.data.success) {
-        Alert.alert('Success', 'Your application has been submitted successfully!');
-        dispatch(setSignUpToken({ token: response.data.token }));
-        setTimeout(() => {
-          navigation.navigate(ROUTES.DASHBOARD);
-        }, 1000);
-        // setFormData(initialFormState); // Reset form if needed
-      } else {
-        throw new Error('Unexpected response status');
       }
-    } catch (error) {
-      // Handle error
-      console.log('Submission error:', error.response.data.message || error.message);
-      Alert.alert(
-        'Submission Failed',
-        error.response?.data?.message ||
-          error.message ||
-          'An error occurred while submitting your application. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsSubmitting(false);
+    });
+
+    // Add timeout and progress tracking
+    const source = axios.CancelToken.source();
+    const timeout = setTimeout(() => {
+      source.cancel('Request timeout');
+    }, 30000);
+
+    const response = await axios.post(
+      `${backendUrl}/delivery-partner/auth/register`,
+      formDataToSend,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${registrationToken}`,
+        },
+        cancelToken: source.token,
+        transformRequest: (data) => data, // Bypass axios transformation
+        onUploadProgress: (progress) => {
+          console.log(`Upload progress: ${Math.round((progress.loaded / progress.total) * 100)}%`);
+        },
+      }
+    );
+
+    clearTimeout(timeout);
+
+    if (response.data.success) {
+      Alert.alert('Success', 'Application submitted successfully!');
+      dispatch(setSignUpToken({ token: response.data.token }));
+      navigation.navigate(ROUTES.DASHBOARD);
+    } else {
+      throw new Error(response.data.message || 'Unexpected response');
     }
-  };
+  } catch (error) {
+    if (axios.isCancel(error)) {
+      Alert.alert('Timeout', 'The request took too long. Please try again.');
+    } else {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        'Network error. Please check your connection.';
+      Alert.alert('Error', errorMessage);
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // Helper function to prepare form data for submission
   const prepareSubmissionData = (data: any) => {
     const formData = new FormData();
 
-    // Personal Information
-    formData.append('full_name', data.full_name);
-    formData.append('gender', data.gender);
-    formData.append('phone_number', data.phone_number);
-    formData.append('email', data.email);
-    formData.append('DOB', data.DOB.toISOString().split('T')[0]); // Format as YYYY-MM-DD
+    const appendField = (key, value) => {
+      if (value !== null && value !== undefined) {
+        formData.append(key, String(value)); // always string for non-file
+      }
+    };
 
-    // Contact Information
-    formData.append('emergency_contact_name', data.emergency_contact_name);
-    formData.append('emergency_contact_number', data.emergency_contact_number);
+    const appendFile = (key, fileUri, fileName) => {
+      if (fileUri) {
+        let uri = fileUri;
+        if (!uri.startsWith('file://')) {
+          uri = `file://${uri}`;
+        }
+        formData.append(key, {
+          uri,
+          type: 'image/jpeg',
+          name: fileName,
+        });
+      }
+    };
 
-    // Address Information
-    formData.append('street_address', data.street_address);
-    formData.append('city', data.city);
-    formData.append('postal_code', data.postal_code);
+    // Text fields
+    appendField('full_name', data.full_name);
+    appendField('gender', data.gender);
+    appendField('phone_number', data.phone_number);
+    appendField('email', data.email);
+    appendField('DOB', data.DOB?.toISOString().split('T')[0]);
+    appendField('emergency_contact_name', data.emergency_contact_name);
+    appendField('emergency_contact_number', data.emergency_contact_number);
+    appendField('street_address', data.street_address);
+    appendField('city', data.city);
+    appendField('postal_code', data.postal_code);
+    appendField('vehicle_type', data.vehicle_type);
+    appendField('vehicle_number', data.vehicle_number);
+    appendField('license_number', data.license_number);
+    appendField('license_expiry', data.license_expiry);
+    appendField('insurance_number', data.insurance_number);
+    appendField('insurance_expiry', data.insurance_expiry);
+    appendField('visa_type', data.visa_type);
+    appendField('ni_number', data.ni_number);
+    appendField('student_visa', data.student_visa ? 'true' : 'false');
+    appendField('psw_visa', data.psw_visa ? 'true' : 'false');
+    appendField('availability_schedule', JSON.stringify(data.availability_schedule));
+    appendField('verification_status', data.verification_status);
+    appendField('commission_rate', data.commission_rate);
 
-    // Vehicle Information
-    formData.append('vehicle_type', data.vehicle_type);
-    formData.append('vehicle_number', data.vehicle_number);
-    formData.append('license_number', data.license_number);
-    formData.append('license_expiry', data.license_expiry);
-    formData.append('insurance_number', data.insurance_number);
-    formData.append('insurance_expiry', data.insurance_expiry);
-
-    // Visa Information
-    formData.append('visa_type', data.visa_type);
-    formData.append('ni_number', data.ni_number);
-    formData.append('student_visa', data.student_visa);
-    formData.append('psw_visa', data.psw_visa);
-
-    // Append files if they exist
-    if (data.government_id) {
-      formData.append('government_id', {
-        uri: data.government_id,
-        type: 'image/jpeg', // or get actual mime type
-        name: 'government_id.jpg',
-      });
-    }
-
-    if (data.residential_proof) {
-      formData.append('residential_proof', {
-        uri: data.residential_proof,
-        type: 'image/jpeg',
-        name: 'residential_proof.jpg',
-      });
-    }
-
-    if (data.license_photo_url) {
-      formData.append('license_photo_url', {
-        uri: data.license_photo_url,
-        type: 'image/jpeg',
-        name: 'license_photo.jpg',
-      });
-    }
-
-    if (data.vehicle_photo_url) {
-      formData.append('vehicle_photo_url', {
-        uri: data.vehicle_photo_url,
-        type: 'image/jpeg',
-        name: 'vehicle_photo.jpg',
-      });
-    }
-
-    if (data.profile_photo_url) {
-      formData.append('profile_photo_url', {
-        uri: data.profile_photo_url,
-        type: 'image/jpeg',
-        name: 'profile_photo.jpg',
-      });
-    }
-
-    // Availability Schedule
-    formData.append('availability_schedule', JSON.stringify(data.availability_schedule));
-
-    // System Fields
-    formData.append('verification_status', data.verification_status);
-    formData.append('commission_rate', data.commission_rate.toString());
+    // Files
+    appendFile('government_id', data.government_id, 'government_id.jpg');
+    appendFile('residential_proof', data.residential_proof, 'residential_proof.jpg');
+    appendFile('license_photo_url', data.license_photo_url, 'license_photo.jpg');
+    appendFile('vehicle_photo_url', data.vehicle_photo_url, 'vehicle_photo.jpg');
+    appendFile('profile_photo_url', data.profile_photo_url, 'profile_photo.jpg');
 
     return formData;
   };
