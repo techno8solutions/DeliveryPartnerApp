@@ -1,9 +1,10 @@
 // redux/features/orders/orderSlice.ts
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { calculateDistance, calculateETA, generateNearbyCoordinates } from '~/utils/helper'
+import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { orderService } from '~/services/orderService';
+import { calculateDistance, calculateETA, generateNearbyCoordinates } from '~/utils/helper';
 
 // Mumbai coordinates for demo purposes
-const MUMBAI_COORDS = { latitude: 19.0760, longitude: 72.8777 };
+const MUMBAI_COORDS = { latitude: 19.076, longitude: 72.8777 };
 
 export type OrderStatus = 'Pending' | 'Picked' | 'Out for Delivery' | 'Delivered';
 
@@ -33,11 +34,57 @@ export interface Order {
 interface OrderState {
   orders: Order[];
   currentLocation: Coordinates | null;
+  loading: boolean;
+  error: string | null;
 }
+export const fetchAssignedOrders = createAsyncThunk(
+  'orders/fetchAssignedOrders',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await orderService.getAssignedOrders();
+      return response.orders || response.data || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch orders');
+    }
+  }
+);
+export const updateOrderStatusAPI = createAsyncThunk(
+  'orders/updateOrderStatusAPI',
+  async (
+    {
+      assignmentId,
+      status,
+      notes,
+      coordinates,
+    }: {
+      assignmentId: string;
+      status: string;
+      notes?: string;
+      coordinates?: { latitude: number; longitude: number };
+    },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await orderService.updateOrderStatus(
+        assignmentId,
+        status,
+        notes,
+        coordinates
+      );
+      return { assignmentId, status, response };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update order status');
+    }
+  }
+);
 
 const generateOrder = (id: string, status: OrderStatus, data: Partial<Order>): Order => {
   const deliveryCoords = generateNearbyCoordinates(MUMBAI_COORDS.latitude, MUMBAI_COORDS.longitude);
-  const pickupCoords = generateNearbyCoordinates(deliveryCoords.latitude, deliveryCoords.longitude, 5000);
+  const pickupCoords = generateNearbyCoordinates(
+    deliveryCoords.latitude,
+    deliveryCoords.longitude,
+    5000
+  );
   const distance = calculateDistance(
     pickupCoords.latitude,
     pickupCoords.longitude,
@@ -65,77 +112,16 @@ const generateOrder = (id: string, status: OrderStatus, data: Partial<Order>): O
 };
 
 const initialState: OrderState = {
-  orders: [
-    generateOrder('ORD123', 'Pending', {
-      items: ['Pizza', 'Burger'],
-      pickupLocation: 'Domino’s, Vashi',
-      deliveryAddress: 'Sector 17, Vashi',
-      contactName: 'Ravi',
-      contactPhone: '9876543210',
-    }),
-    generateOrder('ORD124', 'Picked', {
-      items: ['Parcel Box'],
-      pickupLocation: 'BlueDart, CBD',
-      deliveryAddress: 'Palm Beach Rd, Nerul',
-      contactName: 'Akash',
-      contactPhone: '9823456780',
-    }),
-    generateOrder('ORD125', 'Out for Delivery', {
-      items: ['Laptop', 'Charger'],
-      pickupLocation: 'Croma, Seawoods',
-      deliveryAddress: 'Sec 28, Vashi',
-      contactName: 'Pooja',
-      contactPhone: '9812345678',
-    }),
-    generateOrder('ORD126', 'Delivered', {
-      items: ['Books', 'Notebook'],
-      pickupLocation: 'BookStore, Sanpada',
-      deliveryAddress: 'Sec 30, Kharghar',
-      contactName: 'Rahul',
-      contactPhone: '9871234567',
-      paymentStatus: 'Paid',
-    }),
-    generateOrder('ORD127', 'Pending', {
-      items: ['Grocery Items'],
-      pickupLocation: 'Reliance Smart, Juinagar',
-      deliveryAddress: 'Sec 10, Belapur',
-      contactName: 'Sneha',
-      contactPhone: '9823984738',
-    }),
-    generateOrder('ORD128', 'Picked', {
-      items: ['Furniture - Chair'],
-      pickupLocation: 'Urban Ladder, Panvel',
-      deliveryAddress: 'Plot 12, Ulwe',
-      contactName: 'Varun',
-      contactPhone: '9898989898',
-    }),
-    generateOrder('ORD129', 'Out for Delivery', {
-      items: ['Courier Envelope'],
-      pickupLocation: 'DTDC, Chembur',
-      deliveryAddress: 'Govandi East',
-      contactName: 'Manisha',
-      contactPhone: '9811112222',
-    }),
-    generateOrder('ORD130', 'Delivered', {
-      items: ['Medicine Kit'],
-      pickupLocation: 'Apollo Pharmacy, Nerul',
-      deliveryAddress: 'Seawoods Grand Central',
-      contactName: 'Alok',
-      contactPhone: '9933445566',
-      paymentStatus: 'Paid',
-    }),
-  ],
+  orders: [],
   currentLocation: null,
+  loading: false,
+  error: null,
 };
-
 const orderSlice = createSlice({
   name: 'orders',
   initialState,
   reducers: {
-    updateOrderStatus: (
-      state,
-      action: PayloadAction<{ orderId: string; status: OrderStatus }>
-    ) => {
+    updateOrderStatus: (state, action: PayloadAction<{ orderId: string; status: OrderStatus }>) => {
       const order = state.orders.find((o) => o.id === action.payload.orderId);
       if (order) {
         order.status = action.payload.status;
@@ -154,19 +140,58 @@ const orderSlice = createSlice({
         order.notificationSent = true;
       }
     },
-    addNewOrder: (state, action: PayloadAction<Partial<Order>>) => {
-      const newId = `ORD${Math.floor(100 + Math.random() * 900)}`; // Generate random ID
-      const newOrder = generateOrder(newId, 'Pending', action.payload);
-      state.orders.unshift(newOrder);
+    clearError: (state) => {
+      state.error = null;
     },
   },
+  extraReducers: (builder) => {
+    builder
+      // Fetch assigned orders
+      .addCase(fetchAssignedOrders.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAssignedOrders.fulfilled, (state, action) => {
+        state.loading = false;
+        state.orders = action.payload.map((apiOrder: any) => ({
+          id: apiOrder.id.toString(),
+          status: apiOrder.status,
+          items: apiOrder.items || ['Unknown Item'],
+          pickupLocation: apiOrder.pickupLocation || 'Unknown Location',
+          pickupCoords: generateNearbyCoordinates(19.076, 72.8777), // Default Mumbai coords
+          deliveryAddress: apiOrder.deliveryAddress || 'Unknown Address',
+          deliveryCoords: apiOrder.deliveryCoords || generateNearbyCoordinates(19.076, 72.8777),
+          contactName: apiOrder.contactName || 'Unknown',
+          contactPhone: apiOrder.contactPhone || '0000000000',
+          distance:
+            typeof apiOrder.distance === 'string'
+              ? parseFloat(apiOrder.distance) * 1000
+              : apiOrder.distance || 0,
+          eta: apiOrder.eta || '15 min',
+          createdAt: apiOrder.orderDate || new Date().toISOString(),
+          paymentStatus: 'Pending',
+          earnings: Math.floor(Math.random() * 100) + 50,
+          assignmentId: apiOrder.assignmentId,
+        }));
+      })
+      .addCase(fetchAssignedOrders.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      // Update order status
+      .addCase(updateOrderStatusAPI.fulfilled, (state, action) => {
+        const { assignmentId, status } = action.payload;
+        const order = state.orders.find((o) => o.assignmentId === assignmentId);
+        if (order) {
+          order.status = status as OrderStatus;
+          if (status === 'Delivered') {
+            order.paymentStatus = 'Paid';
+          }
+        }
+      });
+  },
 });
-
-export const { 
-  updateOrderStatus, 
-  setCurrentLocation, 
-  markNotificationSent,
-  addNewOrder 
-} = orderSlice.actions;
+export const { updateOrderStatus, setCurrentLocation, markNotificationSent, clearError } =
+  orderSlice.actions;
 
 export default orderSlice.reducer;

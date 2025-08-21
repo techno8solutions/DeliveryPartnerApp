@@ -1,12 +1,6 @@
 // utils/helpers.ts
 
-// Format distance in meters to readable string (km or m)
-export const formatDistance = (meters: number): string => {
-  if (meters >= 1000) {
-    return `${(meters / 1000).toFixed(1)} km`;
-  }
-  return `${Math.round(meters)} m`;
-};
+import { OrderStatus } from '~/redux/features/orders/orderSlice';
 
 // Format duration in seconds to readable string (hh:mm:ss)
 export const formatDuration = (seconds: number): string => {
@@ -70,4 +64,31 @@ export const generateNearbyCoordinates = (
     latitude: y + y0,
     longitude: x + x0,
   };
+};
+// utils/helper.ts
+export const formatDistance = (distance: number | string): string => {
+  if (typeof distance === 'string') {
+    return distance; // Already formatted
+  }
+
+  if (distance < 1000) {
+    return `${Math.round(distance)} m`;
+  } else {
+    return `${(distance / 1000).toFixed(1)} km`;
+  }
+};
+
+// Add this function to convert API status to frontend status
+export const mapApiStatusToFrontend = (apiStatus: string): OrderStatus => {
+  const statusMap: Record<string, OrderStatus> = {
+    assigned: 'Pending',
+    accepted: 'Pending',
+    picked_up: 'Picked',
+    out_for_delivery: 'Out for Delivery',
+    delivered: 'Delivered',
+    // 'cancelled': 'Cancelled',
+    // 'rejected': 'Rejected'
+  };
+
+  return statusMap[apiStatus] || 'Pending';
 };

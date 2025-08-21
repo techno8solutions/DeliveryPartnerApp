@@ -28,6 +28,7 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '~/navigations/types';
 import { setSignUpToken } from '~/redux/features/auth/authSlice';
 
+
 interface FormData {
   // Personal Information
   full_name: string;
@@ -106,13 +107,10 @@ const RegistrationScreen = () => {
   const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDOBPicker, setShowDOBPicker] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [licenseExpiry, setLicenseExpiry] = useState<Date>(new Date());
   const [showLicenseExpiryPicker, setShowLicenseExpiryPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInsuranceExpiryPicker, setShowInsuranceExpiryPicker] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     // Personal Information
@@ -177,6 +175,10 @@ const RegistrationScreen = () => {
   const registrationToken = useSelector((state: RootState) => state.auth.registrationToken);
   const userID = useSelector((state: RootState) => state.auth.userID);
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(formData.DOB.getDate());
+  const [selectedMonth, setSelectedMonth] = useState(formData.DOB.getMonth());
+  const [selectedYear, setSelectedYear] = useState(formData.DOB.getFullYear());
 
   const vehicleOptions: VehicleOption[] = [
     { label: 'Bicycle', value: 'bicycle' },
@@ -311,260 +313,229 @@ const RegistrationScreen = () => {
   //     handleInputChange('license_expiry', selectedDate.toISOString().split('T')[0]);
   //   }
   // };
+  const getDaysInMonth = (month: number, year: number): number => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const formatDate = (day: number, month: number, year: number): string => {
+    const date = new Date(year, month, day);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  // Custom Date Picker Component
+  const CustomDatePicker: React.FC = () => {
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    const days = Array.from(
+      { length: getDaysInMonth(selectedMonth, selectedYear) },
+      (_, i) => i + 1
+    );
+
+    const handleSave = () => {
+      const newDate = new Date(selectedYear, selectedMonth, selectedDay);
+      handleInputChange('DOB', newDate);
+      setShowCustomDatePicker(false);
+    };
+
+    return (
+      <Modal visible={true} transparent animationType="slide">
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="max-h-3/4 rounded-t-3xl bg-white p-6">
+            {/* Header */}
+            <View className="mb-6 flex-row items-center justify-between">
+              <Text className="text-2xl font-bold text-blue-800">Select Date of Birth</Text>
+              <TouchableOpacity onPress={() => setShowCustomDatePicker(false)}>
+                <Ionicons name="close" size={28} color="#2563EB" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Selected Date Preview */}
+            <View className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <Text className="text-center text-lg font-semibold text-blue-800">
+                {formatDate(selectedDay, selectedMonth, selectedYear)}
+              </Text>
+            </View>
+
+            {/* Picker Columns */}
+            <View className="mb-6 flex-row justify-between">
+              {/* Month Picker */}
+              <View className="mr-2 flex-1">
+                <Text className="mb-3 text-center font-semibold text-blue-700">Month</Text>
+                <ScrollView className="h-40" showsVerticalScrollIndicator={false}>
+                  {months.map((month, index) => (
+                    <TouchableOpacity
+                      key={month}
+                      className={`mb-1 rounded-xl p-3 ${
+                        selectedMonth === index ? 'bg-blue-500' : 'bg-blue-50'
+                      }`}
+                      onPress={() => {
+                        setSelectedMonth(index);
+                        const daysInMonth = getDaysInMonth(index, selectedYear);
+                        if (selectedDay > daysInMonth) {
+                          setSelectedDay(daysInMonth);
+                        }
+                      }}>
+                      <Text
+                        className={`text-center font-medium ${
+                          selectedMonth === index ? 'text-white' : 'text-blue-700'
+                        }`}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Day Picker */}
+              <View className="mx-2 flex-1">
+                <Text className="mb-3 text-center font-semibold text-blue-700">Day</Text>
+                <ScrollView className="h-40" showsVerticalScrollIndicator={false}>
+                  {days.map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      className={`mb-1 rounded-xl p-3 ${
+                        selectedDay === day ? 'bg-blue-500' : 'bg-blue-50'
+                      }`}
+                      onPress={() => setSelectedDay(day)}>
+                      <Text
+                        className={`text-center font-medium ${
+                          selectedDay === day ? 'text-white' : 'text-blue-700'
+                        }`}>
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Year Picker */}
+              <View className="ml-2 flex-1">
+                <Text className="mb-3 text-center font-semibold text-blue-700">Year</Text>
+                <ScrollView className="h-40" showsVerticalScrollIndicator={false}>
+                  {years.map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      className={`mb-1 rounded-xl p-3 ${
+                        selectedYear === year ? 'bg-blue-500' : 'bg-blue-50'
+                      }`}
+                      onPress={() => {
+                        setSelectedYear(year);
+                        const daysInMonth = getDaysInMonth(selectedMonth, year);
+                        if (selectedDay > daysInMonth) {
+                          setSelectedDay(daysInMonth);
+                        }
+                      }}>
+                      <Text
+                        className={`text-center font-medium ${
+                          selectedYear === year ? 'text-white' : 'text-blue-700'
+                        }`}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View className="flex-row space-x-4">
+              <TouchableOpacity
+                className="flex-1 items-center rounded-xl bg-blue-100 p-4"
+                onPress={() => setShowCustomDatePicker(false)}>
+                <Text className="font-semibold text-blue-700">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 items-center rounded-xl bg-blue-600 p-4"
+                onPress={handleSave}>
+                <Text className="font-semibold text-white">Save Date</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   const renderStep = () => {
     switch (currentStep) {
       case 0: // Personal Details
         return (
-          <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
-            <View className="mb-5">
-              <Text className="text-xl font-bold text-gray-900">Personal Information</Text>
-              <Text className="text-sm text-gray-500">Tell us about yourself</Text>
+          <View className="mb-3 rounded-xl border border-blue-100 bg-white p-6 shadow-lg">
+            <View className="mb-6">
+              <Text className="text-2xl font-bold text-blue-800">Delivery Partner Information</Text>
+              <Text className="text-sm text-blue-600">Tell us about yourself</Text>
             </View>
 
-            <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Full Name</Text>
-              <View className="flex-row items-center rounded-lg border border-gray-200 bg-gray-50 px-3">
-                <MaterialIcons name="person" size={20} color="#6b7280" />
+            {/* Full Name Input */}
+            <View className="mb-5">
+              <Text className="mb-2 text-sm font-semibold text-blue-700">Full Name</Text>
+              <View className="flex-row items-center rounded-xl border-2 border-blue-200 bg-blue-50 p-4">
+                <Ionicons name="person" size={22} color="#2563EB" />
                 <TextInput
-                  className="ml-2 h-12 flex-1 text-base text-gray-900"
+                  className="ml-3 h-12 flex-1 text-base text-blue-900"
                   value={formData.full_name}
                   onChangeText={(text) => handleInputChange('full_name', text)}
                   placeholder="Enter your full name"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#93C5FD"
                 />
               </View>
             </View>
 
-            <View className="mb-6">
-              <Text className="mb-2 text-sm font-medium text-gray-700">Date of Birth</Text>
-
+            {/* Date of Birth Input */}
+            <View className="mb-5">
+              <Text className="mb-2 text-sm font-semibold text-blue-700">Date of Birth</Text>
               <TouchableOpacity
-                className="h-14 flex-row items-center rounded-lg border border-gray-300 bg-gray-50 px-4 active:border-blue-500 active:bg-blue-50"
-                onPress={() => setDatePickerVisible(true)}
+                className="h-14 flex-row items-center rounded-xl border-2 border-blue-200 bg-blue-50 p-4 active:border-blue-500"
+                onPress={() => setShowCustomDatePicker(true)}
                 activeOpacity={0.7}>
-                <MaterialIcons name="event" size={22} color="#4b5563" />
-                <Text className="ml-3 flex-1 text-base text-gray-900">
+                <Ionicons name="calendar" size={22} color="#2563EB" />
+                <Text className="ml-3 flex-1 text-base text-blue-900">
                   {formData.DOB.toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
                   })}
                 </Text>
-                <MaterialIcons name="keyboard-arrow-down" size={24} color="#6b7280" />
+                <Ionicons name="chevron-down" size={24} color="#2563EB" />
               </TouchableOpacity>
-
-              {datePickerVisible && (
-                <View className="mt-2">
-                  {Platform.OS === 'ios' ? (
-                    <>
-                      <TouchableOpacity
-                        className="h-12 flex-row items-center justify-between rounded-lg bg-white px-4 shadow-sm"
-                        onPress={() => setShowDOBPicker(true)}
-                        activeOpacity={0.7}>
-                        <Text className={`${formattedDate ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {formattedDate || 'Select Date of Birth'}
-                        </Text>
-                      </TouchableOpacity>
-
-                      <Modal
-                        visible={showDOBPicker}
-                        transparent={true}
-                        animationType="slide"
-                        onRequestClose={() => setShowDOBPicker(false)}>
-                        <View className="flex-1 justify-end bg-black/50">
-                          <View className="rounded-t-xl bg-white p-4">
-                            <View className="mb-2 flex-row items-center justify-between">
-                              <TouchableOpacity onPress={() => setShowDOBPicker(false)}>
-                                <Text className="text-base text-blue-500">Cancel</Text>
-                              </TouchableOpacity>
-                              <Text className="font-medium text-gray-900">Select Date</Text>
-                              <TouchableOpacity onPress={handleDone}>
-                                <Text className="text-base text-blue-500">Done</Text>
-                              </TouchableOpacity>
-                            </View>
-
-                            <View className="flex-row justify-between">
-                              {/* Days */}
-                              <ScrollView style={{ height: 150 }} className="w-1/3">
-                                {days.map((day) => (
-                                  <TouchableOpacity
-                                    key={day}
-                                    className={`py-2 text-center ${
-                                      selectedDay === day ? 'bg-blue-100' : ''
-                                    }`}
-                                    onPress={() => setSelectedDay(day)}>
-                                    <Text
-                                      className={`text-center text-base ${
-                                        selectedDay === day
-                                          ? 'font-semibold text-blue-600'
-                                          : 'text-gray-700'
-                                      }`}>
-                                      {day}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </ScrollView>
-
-                              {/* Months */}
-                              <ScrollView style={{ height: 150 }} className="w-1/3">
-                                {months.map((month, index) => (
-                                  <TouchableOpacity
-                                    key={month}
-                                    className={`py-2 text-center ${
-                                      selectedMonth === index ? 'bg-blue-100' : ''
-                                    }`}
-                                    onPress={() => setSelectedMonth(index)}>
-                                    <Text
-                                      className={`text-center text-base ${
-                                        selectedMonth === index
-                                          ? 'font-semibold text-blue-600'
-                                          : 'text-gray-700'
-                                      }`}>
-                                      {month}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </ScrollView>
-
-                              {/* Years */}
-                              <ScrollView style={{ height: 150 }} className="w-1/3">
-                                {years.map((year) => (
-                                  <TouchableOpacity
-                                    key={year}
-                                    className={`py-2 text-center ${
-                                      selectedYear === year ? 'bg-blue-100' : ''
-                                    }`}
-                                    onPress={() => setSelectedYear(year)}>
-                                    <Text
-                                      className={`text-center text-base ${
-                                        selectedYear === year
-                                          ? 'font-semibold text-blue-600'
-                                          : 'text-gray-700'
-                                      }`}>
-                                      {year}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </ScrollView>
-                            </View>
-                          </View>
-                        </View>
-                      </Modal>
-                    </>
-                  ) : (
-                    <DateTimePicker
-                      value={formData.DOB}
-                      mode="date"
-                      display="default"
-                      onChange={handleDateChange}
-                      maximumDate={new Date()}
-                      positiveButton={{ label: 'OK', textColor: '#3b82f6' }}
-                      negativeButton={{ label: 'Cancel', textColor: '#6b7280' }}
-                    />
-                  )}
-                </View>
-              )}
             </View>
+
+            {/* Gender Input */}
             <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Gender</Text>
-              <View className="flex-row items-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-                <MaterialIcons name="transgender" size={20} color="#6b7280" className="ml-3" />
-
-                {Platform.OS === 'ios' ? (
-                  <>
-                    <TouchableOpacity
-                      className="h-12 flex-row items-center justify-between rounded-lg  px-4"
-                      onPress={() => setShowGenderPicker(true)}
-                      activeOpacity={0.7}>
-                      <Text className={`${formData.gender ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {formData.gender ? capitalize(formData.gender) : 'Select Gender'}
-                      </Text>
-                      <MaterialIcons name="keyboard-arrow-down" size={24} color="#6b7280" />
-                    </TouchableOpacity>
-
-                    <Modal
-                      visible={showGenderPicker}
-                      transparent
-                      animationType="slide"
-                      onRequestClose={() => setShowGenderPicker(false)}>
-                      <View className="flex-1 justify-end bg-black/50">
-                        <View className="rounded-t-xl bg-white p-4">
-                          {/* Header */}
-                          <View className="mb-2 flex-row items-center justify-between">
-                            <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
-                              <Text className="text-base text-blue-500">Cancel</Text>
-                            </TouchableOpacity>
-                            <Text className="font-medium text-gray-900">Select Gender</Text>
-                            <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
-                              <Text className="text-base text-blue-500">Done</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* Gender Options */}
-                          <View className="h-[200px]">
-                            {['Male', 'Female', 'Other'].map((option) => (
-                              <TouchableOpacity
-                                key={option}
-                                className={`rounded-md px-4 py-3 ${
-                                  formData.gender === option.toLowerCase()
-                                    ? 'bg-blue-100'
-                                    : 'bg-transparent'
-                                }`}
-                                onPress={() => {
-                                  handleInputChange(
-                                    'gender',
-                                    option.toLowerCase() as 'male' | 'female' | 'other'
-                                  );
-                                }}>
-                                <Text className="text-lg text-gray-800">{option}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
-                      </View>
-                    </Modal>
-                  </>
-                ) : (
-                  // Android Picker
-                  <Picker
-                    style={{ flex: 1 }}
-                    dropdownIconColor="#6b7280"
-                    mode="dropdown"
-                    dropdownIconRippleColor="#d1d5db"
-                    numberOfLines={1}
-                    selectedValue={formData.gender}
-                    onValueChange={(itemValue) =>
-                      handleInputChange('gender', itemValue as 'male' | 'female' | 'other')
-                    }>
-                    <Picker.Item
-                      label="Select Gender"
-                      value=""
-                      enabled={false}
-                      style={{ color: '#9ca3af' }}
-                    />
-                    <Picker.Item
-                      label="Male"
-                      value="male"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                    <Picker.Item
-                      label="Female"
-                      value="female"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                    <Picker.Item
-                      label="Other"
-                      value="other"
-                      style={{ fontSize: 16, color: '#111827' }}
-                    />
-                  </Picker>
-                )}
+              <Text className="mb-2 text-sm font-semibold text-blue-700">Gender</Text>
+              <View className="flex-row items-center rounded-xl border-2 border-blue-200 bg-blue-50 p-4">
+                <Ionicons name="transgender" size={22} color="#2563EB" />
+                <Text className="ml-3 flex-1 text-base text-blue-900">
+                  {formData.gender
+                    ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1)
+                    : 'Select Gender'}
+                </Text>
+                <Ionicons name="chevron-down" size={24} color="#2563EB" />
               </View>
             </View>
+
+            {/* Custom Date Picker Modal */}
+            {showCustomDatePicker && <CustomDatePicker />}
           </View>
         );
-
       case 1: // Contact Details
         return (
           <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
@@ -698,7 +669,6 @@ const RegistrationScreen = () => {
               <Text className="text-xl font-bold text-gray-900">Document Uploads</Text>
               <Text className="text-sm text-gray-500">Upload required documents</Text>
             </View>
-
 
             <View className="mb-5">
               <Text className="mb-1.5 text-sm font-medium text-gray-700">Government ID</Text>
@@ -1248,81 +1218,83 @@ const RegistrationScreen = () => {
     total_ratings: 0,
     commission_rate: 0.15,
   };
-const handleNext = async () => {
-  if (currentStep < steps.length - 1) {
-    setCurrentStep(currentStep + 1);
-    return;
-  }
+  const handleNext = async () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(currentStep + 1);
+      return;
+    }
 
-  try {
-    setIsSubmitting(true);
-    const submissionData = prepareSubmissionData(formData);
+    try {
+      setIsSubmitting(true);
+      const submissionData = prepareSubmissionData(formData);
 
-    // Create a new FormData instance
-    const formDataToSend = new FormData();
+      // Create a new FormData instance
+      const formDataToSend = new FormData();
 
-    // Append all fields
-    Object.entries(submissionData).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) {
-        if (typeof value === 'object' && value.uri) {
-          // Handle file objects
-          formDataToSend.append(key, {
-            uri: value.uri,
-            type: value.type || 'image/jpeg',
-            name: value.name || `${key}.jpg`,
-          });
-        } else {
-          // Handle regular fields
-          formDataToSend.append(key, String(value));
+      // Append all fields
+      Object.entries(submissionData).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          if (typeof value === 'object' && value.uri) {
+            // Handle file objects
+            formDataToSend.append(key, {
+              uri: value.uri,
+              type: value.type || 'image/jpeg',
+              name: value.name || `${key}.jpg`,
+            });
+          } else {
+            // Handle regular fields
+            formDataToSend.append(key, String(value));
+          }
         }
+      });
+
+      // Add timeout and progress tracking
+      const source = axios.CancelToken.source();
+      const timeout = setTimeout(() => {
+        source.cancel('Request timeout');
+      }, 30000);
+
+      const response = await axios.post(
+        `${backendUrl}/delivery-partner/auth/register`,
+        formDataToSend,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${registrationToken}`,
+          },
+          cancelToken: source.token,
+          transformRequest: (data) => data, // Bypass axios transformation
+          onUploadProgress: (progress) => {
+            console.log(
+              `Upload progress: ${Math.round((progress.loaded / progress.total) * 100)}%`
+            );
+          },
+        }
+      );
+
+      clearTimeout(timeout);
+
+      if (response.data.success) {
+        Alert.alert('Success', 'Application submitted successfully!');
+        dispatch(setSignUpToken({ token: response.data.token }));
+        navigation.navigate(ROUTES.DASHBOARD);
+      } else {
+        throw new Error(response.data.message || 'Unexpected response');
       }
-    });
-
-    // Add timeout and progress tracking
-    const source = axios.CancelToken.source();
-    const timeout = setTimeout(() => {
-      source.cancel('Request timeout');
-    }, 30000);
-
-    const response = await axios.post(
-      `${backendUrl}/delivery-partner/auth/register`,
-      formDataToSend,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${registrationToken}`,
-        },
-        cancelToken: source.token,
-        transformRequest: (data) => data, // Bypass axios transformation
-        onUploadProgress: (progress) => {
-          console.log(`Upload progress: ${Math.round((progress.loaded / progress.total) * 100)}%`);
-        },
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        Alert.alert('Timeout', 'The request took too long. Please try again.');
+      } else {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.message ||
+          'Network error. Please check your connection.';
+        Alert.alert('Error', errorMessage);
       }
-    );
-
-    clearTimeout(timeout);
-
-    if (response.data.success) {
-      Alert.alert('Success', 'Application submitted successfully!');
-      dispatch(setSignUpToken({ token: response.data.token }));
-      navigation.navigate(ROUTES.DASHBOARD);
-    } else {
-      throw new Error(response.data.message || 'Unexpected response');
+    } finally {
+      setIsSubmitting(false);
     }
-  } catch (error) {
-    if (axios.isCancel(error)) {
-      Alert.alert('Timeout', 'The request took too long. Please try again.');
-    } else {
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        'Network error. Please check your connection.';
-      Alert.alert('Error', errorMessage);
-    }
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   // Helper function to prepare form data for submission
   const prepareSubmissionData = (data: any) => {
