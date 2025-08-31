@@ -28,7 +28,6 @@ import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { RootStackParamList } from '~/navigations/types';
 import { setSignUpToken } from '~/redux/features/auth/authSlice';
 
-
 interface FormData {
   // Personal Information
   full_name: string;
@@ -59,10 +58,10 @@ interface FormData {
   vehicle_photo_url: string | null;
 
   // Visa Information
-  visa_type: string | boolean;
+  account_holder_name: string | boolean;
   ni_number: number | null;
-  student_visa: number | boolean | null;
-  psw_visa: number | boolean | null;
+  account_number: number | boolean | null;
+  sort_code: number | boolean | null;
 
   // Documents
   profile_photo_url: string | null;
@@ -142,10 +141,10 @@ const RegistrationScreen = () => {
     vehicle_photo_url: null,
 
     // Visa Information
-    visa_type: '',
+    account_holder_name: '',
     ni_number: 0,
-    student_visa: 0,
-    psw_visa: 0,
+    account_number: 0,
+    sort_code: 0,
 
     // Documents
     profile_photo_url: null,
@@ -902,17 +901,17 @@ const RegistrationScreen = () => {
         return (
           <View className="mb-3 rounded-xl bg-white p-5 shadow-sm">
             <View className="mb-5">
-              <Text className="text-xl font-bold text-gray-900">Visa & Additional Information</Text>
+              <Text className="text-xl font-bold text-gray-900">Bank & Additional Information</Text>
               <Text className="text-sm text-gray-500">Provide your visa details</Text>
             </View>
 
             {/* Visa Type */}
             <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Visa Type</Text>
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Account Holder Name</Text>
               <TextInput
                 className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
-                value={formData.visa_type}
-                onChangeText={(text) => handleInputChange('visa_type', text)}
+                value={formData.account_holder_name}
+                onChangeText={(text) => handleInputChange('account_holder_name', text)}
                 placeholder="Enter your visa type"
               />
             </View>
@@ -935,12 +934,12 @@ const RegistrationScreen = () => {
 
             {/* Student Visa */}
             <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">Student Visa Number</Text>
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Account Number</Text>
               <TextInput
                 className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
-                value={formData.student_visa !== null ? String(formData.student_visa) : ''}
+                value={formData.account_number !== null ? String(formData.account_number) : ''}
                 onChangeText={(text) =>
-                  handleInputChange('student_visa', text === '' ? null : Number(text))
+                  handleInputChange('account_number', text === '' ? null : Number(text))
                 }
                 placeholder="Enter Student Visa number"
                 keyboardType="numeric"
@@ -949,12 +948,12 @@ const RegistrationScreen = () => {
 
             {/* PSW Visa */}
             <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-medium text-gray-700">PSW Visa Number</Text>
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">sort_code Number</Text>
               <TextInput
                 className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-gray-900"
-                value={formData.psw_visa?.toString() || ''}
+                value={formData.sort_code?.toString() || ''}
                 onChangeText={(value) =>
-                  handleInputChange('psw_visa', value === '' ? null : Number(value))
+                  handleInputChange('sort_code', value === '' ? null : Number(value))
                 }
                 placeholder="Enter PSW Visa number"
                 keyboardType="numeric"
@@ -1195,10 +1194,10 @@ const RegistrationScreen = () => {
     insurance_expiry: new Date(),
     license_photo_url: null,
     vehicle_photo_url: null,
-    visa_type: '',
+    account_holder_name: '',
     ni_number: '',
-    student_visa: '',
-    psw_visa: '',
+    account_number: '',
+    sort_code: '',
     profile_photo_url: null,
     availability_schedule: {
       monday: { morning: false, afternoon: false, evening: false },
@@ -1226,34 +1225,61 @@ const RegistrationScreen = () => {
 
     try {
       setIsSubmitting(true);
-      const submissionData = prepareSubmissionData(formData);
 
-      // Create a new FormData instance
+      // Create FormData directly without the helper function
       const formDataToSend = new FormData();
 
-      // Append all fields
-      Object.entries(submissionData).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-          if (typeof value === 'object' && value.uri) {
-            // Handle file objects
-            formDataToSend.append(key, {
-              uri: value.uri,
-              type: value.type || 'image/jpeg',
-              name: value.name || `${key}.jpg`,
-            });
-          } else {
-            // Handle regular fields
-            formDataToSend.append(key, String(value));
-          }
+      // Add all text fields
+      formDataToSend.append('full_name', formData.full_name);
+      formDataToSend.append('gender', formData.gender);
+      formDataToSend.append('phone_number', formData.phone_number);
+      formDataToSend.append('email', formData.email);
+      formDataToSend.append('DOB', formData.DOB?.toISOString().split('T')[0]);
+      formDataToSend.append('emergency_contact_name', formData.emergency_contact_name);
+      formDataToSend.append('emergency_contact_number', formData.emergency_contact_number);
+      formDataToSend.append('street_address', formData.street_address);
+      formDataToSend.append('city', formData.city);
+      formDataToSend.append('postal_code', formData.postal_code);
+      formDataToSend.append('vehicle_type', formData.vehicle_type);
+      formDataToSend.append('vehicle_number', formData.vehicle_number);
+      formDataToSend.append('license_number', formData.license_number);
+      formDataToSend.append('license_expiry', formData.license_expiry);
+      formDataToSend.append('insurance_number', formData.insurance_number);
+      formDataToSend.append('insurance_expiry', formData.insurance_expiry);
+      formDataToSend.append('account_holder_name', formData.account_holder_name);
+      formDataToSend.append('ni_number', formData.ni_number);
+      formDataToSend.append('account_number', formData.account_number ? 'true' : 'false');
+      formDataToSend.append('sort_code', formData.sort_code ? 'true' : 'false');
+      formDataToSend.append(
+        'availability_schedule',
+        JSON.stringify(formData.availability_schedule)
+      );
+      formDataToSend.append('verification_status', formData.verification_status);
+      formDataToSend.append('commission_rate', formData.commission_rate);
+
+      // Add files with proper React Native format
+      const addFile = (fieldName, fileUri, fileName) => {
+        if (fileUri) {
+          formDataToSend.append(fieldName, {
+            uri: fileUri,
+            type: 'image/jpeg',
+            name: fileName,
+          });
         }
-      });
+      };
 
-      // Add timeout and progress tracking
-      const source = axios.CancelToken.source();
-      const timeout = setTimeout(() => {
-        source.cancel('Request timeout');
-      }, 30000);
+      addFile('government_id', formData.government_id, 'government_id.jpg');
+      addFile('residential_proof', formData.residential_proof, 'residential_proof.jpg');
+      addFile('license_photo_url', formData.license_photo_url, 'license_photo.jpg');
+      addFile('vehicle_photo_url', formData.vehicle_photo_url, 'vehicle_photo.jpg');
+      addFile('profile_photo_url', formData.profile_photo_url, 'profile_photo.jpg');
 
+      console.log('FormData contents:');
+
+      // const source = axios.CancelToken.source();
+      // const timeout = setTimeout(() => {
+      //   source.cancel('Request timeout');
+      // }, 30000);
       const response = await axios.post(
         `${backendUrl}/delivery-partner/auth/register`,
         formDataToSend,
@@ -1262,18 +1288,11 @@ const RegistrationScreen = () => {
             'Content-Type': 'multipart/form-data',
             Authorization: `Bearer ${registrationToken}`,
           },
-          cancelToken: source.token,
-          transformRequest: (data) => data, // Bypass axios transformation
-          onUploadProgress: (progress) => {
-            console.log(
-              `Upload progress: ${Math.round((progress.loaded / progress.total) * 100)}%`
-            );
-          },
         }
       );
+      // clearTimeout(timeout);
 
-      clearTimeout(timeout);
-
+      console.log(response);
       if (response.data.success) {
         Alert.alert('Success', 'Application submitted successfully!');
         dispatch(setSignUpToken({ token: response.data.token }));
@@ -1285,6 +1304,7 @@ const RegistrationScreen = () => {
       if (axios.isCancel(error)) {
         Alert.alert('Timeout', 'The request took too long. Please try again.');
       } else {
+        console.log(error);
         const errorMessage =
           error.response?.data?.message ||
           error.message ||
@@ -1295,66 +1315,6 @@ const RegistrationScreen = () => {
       setIsSubmitting(false);
     }
   };
-
-  // Helper function to prepare form data for submission
-  const prepareSubmissionData = (data: any) => {
-    const formData = new FormData();
-
-    const appendField = (key, value) => {
-      if (value !== null && value !== undefined) {
-        formData.append(key, String(value)); // always string for non-file
-      }
-    };
-
-    const appendFile = (key, fileUri, fileName) => {
-      if (fileUri) {
-        let uri = fileUri;
-        if (!uri.startsWith('file://')) {
-          uri = `file://${uri}`;
-        }
-        formData.append(key, {
-          uri,
-          type: 'image/jpeg',
-          name: fileName,
-        });
-      }
-    };
-
-    // Text fields
-    appendField('full_name', data.full_name);
-    appendField('gender', data.gender);
-    appendField('phone_number', data.phone_number);
-    appendField('email', data.email);
-    appendField('DOB', data.DOB?.toISOString().split('T')[0]);
-    appendField('emergency_contact_name', data.emergency_contact_name);
-    appendField('emergency_contact_number', data.emergency_contact_number);
-    appendField('street_address', data.street_address);
-    appendField('city', data.city);
-    appendField('postal_code', data.postal_code);
-    appendField('vehicle_type', data.vehicle_type);
-    appendField('vehicle_number', data.vehicle_number);
-    appendField('license_number', data.license_number);
-    appendField('license_expiry', data.license_expiry);
-    appendField('insurance_number', data.insurance_number);
-    appendField('insurance_expiry', data.insurance_expiry);
-    appendField('visa_type', data.visa_type);
-    appendField('ni_number', data.ni_number);
-    appendField('student_visa', data.student_visa ? 'true' : 'false');
-    appendField('psw_visa', data.psw_visa ? 'true' : 'false');
-    appendField('availability_schedule', JSON.stringify(data.availability_schedule));
-    appendField('verification_status', data.verification_status);
-    appendField('commission_rate', data.commission_rate);
-
-    // Files
-    appendFile('government_id', data.government_id, 'government_id.jpg');
-    appendFile('residential_proof', data.residential_proof, 'residential_proof.jpg');
-    appendFile('license_photo_url', data.license_photo_url, 'license_photo.jpg');
-    appendFile('vehicle_photo_url', data.vehicle_photo_url, 'vehicle_photo.jpg');
-    appendFile('profile_photo_url', data.profile_photo_url, 'profile_photo.jpg');
-
-    return formData;
-  };
-
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);

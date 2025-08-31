@@ -786,7 +786,6 @@ const DashboardScreen = () => {
             })
           )}
         </ScrollView>
-
         {/* OTP Verification Modal */}
         <OTPVerificationModal
           visible={otpModalVisible}
@@ -804,11 +803,10 @@ const DashboardScreen = () => {
           timer={otpTimer}
           canResend={canResendOTP}
         />
-
         {/* Floating Support Button */}
         <TouchableOpacity
           className="absolute bottom-6 right-6 rounded-full bg-indigo-600 p-4 shadow-lg"
-          onPress={() => Alert.alert('Support', 'Contacting support team...')}>
+          onPress={() => navigation.navigate('SupportTickets')}>
           <Ionicons name="help-circle" size={24} color="white" />
         </TouchableOpacity>
         <TouchableOpacity

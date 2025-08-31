@@ -13,6 +13,7 @@ import { ROUTES } from '../constants/routes';
 import { RootStackParamList } from './types';
 import NotificationScreen from '~/screens/NotificationScreen';
 import ProfileReviewScreen from '~/screens/ProfileReviewScreen';
+import SupportTicketsScreen from '~/screens/SupportTicketsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -41,10 +42,20 @@ const Navigation = () => {
         <Stack.Screen name={ROUTES.DASHBOARD} component={DashboardScreen} />
         <Stack.Screen name={ROUTES.NOTFICATION} component={NotificationScreen} />
         <Stack.Screen name={ROUTES.PROFILE_REVIEW} component={ProfileReviewScreen} />
+        <Stack.Screen
+          name="SupportTickets"
+          component={SupportTicketsScreen}
+          options={{
+            title: 'Support Center',
+            headerStyle: {
+              backgroundColor: '#f8fafc',
+            },
+            headerTintColor: '#1f2937',
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
 };
-
 
 export default Navigation;
